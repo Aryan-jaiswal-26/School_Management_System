@@ -18,11 +18,20 @@ function displayName(user: any): string {
   return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.fullName || 'Faculty';
 }
 
+function generateRandomMeetCode(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz';
+  const part = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return `${part(3)}-${part(4)}-${part(3)}`;
+}
+
 function buildMeetLink(provider: string, meetingLink?: string, meetingCode?: string): string {
   if (meetingLink) return meetingLink;
-  if (provider === 'ZOOM') return 'https://zoom.us/j/meeting';
-  if (meetingCode) return `https://meet.google.com/${meetingCode}`;
-  return 'https://meet.google.com/new';
+  if (provider === 'ZOOM') {
+    const randomZoomId = Math.floor(1000000000 + Math.random() * 9000000000);
+    return `https://zoom.us/j/${randomZoomId}`;
+  }
+  const code = meetingCode || generateRandomMeetCode();
+  return `https://meet.google.com/${code}`;
 }
 
 export class LiveClassController {
@@ -134,6 +143,22 @@ export class LiveClassController {
         return;
       }
 
+      const provider = req.body.provider || 'GOOGLE_MEET';
+      let meetingCode = req.body.meetingCode;
+      let meetingLink = req.body.meetingLink;
+
+      if (!meetingLink) {
+        if (provider === 'GOOGLE_MEET') {
+          meetingCode = meetingCode || generateRandomMeetCode();
+          meetingLink = `https://meet.google.com/${meetingCode}`;
+        } else if (provider === 'ZOOM') {
+          const randomZoomId = Math.floor(1000000000 + Math.random() * 9000000000);
+          meetingLink = `https://zoom.us/j/${randomZoomId}`;
+        } else {
+          meetingLink = 'https://meet.google.com/new';
+        }
+      }
+
       const session = new LiveClassSession({
         schoolId: new Types.ObjectId(schoolId),
         title: req.body.title,
@@ -143,9 +168,9 @@ export class LiveClassController {
         sectionId: req.body.sectionId,
         scheduledAt: new Date(req.body.scheduledAt),
         durationMinutes: req.body.durationMinutes,
-        provider: req.body.provider || 'GOOGLE_MEET',
-        meetingLink: buildMeetLink(req.body.provider || 'GOOGLE_MEET', req.body.meetingLink, req.body.meetingCode),
-        meetingCode: req.body.meetingCode,
+        provider,
+        meetingLink,
+        meetingCode,
         description: req.body.description,
         studyMaterialLinks: req.body.studyMaterialLinks || [],
         status: req.body.status || 'SCHEDULED',
@@ -193,8 +218,30 @@ export class LiveClassController {
 
       if (session.status === 'SCHEDULED') {
         session.status = 'LIVE';
-        await session.save();
       }
+
+      // If user is a student, record their attendance
+      if (req.user?.role === 'STUDENT') {
+        const student = await Student.findOne({
+          schoolId: session.schoolId,
+          userId: req.user.id,
+          isDeleted: false,
+        });
+        if (student) {
+          const alreadyJoined = session.attendees?.some(
+            (a: any) => a.studentId.toString() === student._id.toString()
+          );
+          if (!alreadyJoined) {
+            session.attendees = session.attendees || [];
+            session.attendees.push({
+              studentId: student._id as Types.ObjectId,
+              joinedAt: new Date(),
+            });
+          }
+        }
+      }
+
+      await session.save();
 
       sendResponse(res, 200, 'Live class ready', {
         id: session._id.toString(),
@@ -202,6 +249,102 @@ export class LiveClassController {
         provider: session.provider,
         status: session.status,
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async update(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const schoolId = req.user?.schoolId;
+      if (!schoolId) {
+        res.status(400).json({ success: false, message: 'Missing school context' });
+        return;
+      }
+
+      const session = await LiveClassSession.findOne({
+        _id: req.params.id,
+        schoolId: new Types.ObjectId(schoolId),
+      });
+
+      if (!session) {
+        res.status(404).json({ success: false, message: 'Live class not found' });
+        return;
+      }
+
+      const { title, subject, scheduledAt, durationMinutes, provider, meetingLink, meetingCode, description, recordingUrl, studyMaterialLinks, status } = req.body;
+
+      if (title !== undefined) session.title = title;
+      if (subject !== undefined) session.subject = subject;
+      if (scheduledAt !== undefined) session.scheduledAt = new Date(scheduledAt);
+      if (durationMinutes !== undefined) session.durationMinutes = durationMinutes;
+      if (provider !== undefined) session.provider = provider;
+      if (meetingLink !== undefined) session.meetingLink = meetingLink;
+      if (meetingCode !== undefined) session.meetingCode = meetingCode;
+      if (description !== undefined) session.description = description;
+      if (recordingUrl !== undefined) session.recordingUrl = recordingUrl;
+      if (studyMaterialLinks !== undefined) session.studyMaterialLinks = studyMaterialLinks;
+
+      const oldStatus = session.status;
+      if (status !== undefined) {
+        session.status = status;
+      }
+
+      await session.save();
+
+      // If class ended, trigger auto attendance marking for students in the class/section
+      if (status === 'ENDED' && oldStatus !== 'ENDED' && session.classId) {
+        try {
+          const { Attendance } = await import('../models/Attendance.js');
+
+          const query: any = {
+            schoolId: session.schoolId,
+            classId: session.classId,
+            isDeleted: false,
+          };
+          if (session.sectionId) {
+            query.sectionId = session.sectionId;
+          }
+          const allStudents = await Student.find(query).lean();
+
+          const recordedBy = new Types.ObjectId(req.user?.id);
+          const attendanceDate = new Date();
+          attendanceDate.setHours(0, 0, 0, 0);
+
+          const attendeeIds = new Set(session.attendees?.map((a: any) => a.studentId.toString()) || []);
+
+          for (const std of allStudents) {
+            const isPresent = attendeeIds.has(std._id.toString());
+            const finalStatus = isPresent ? 'PRESENT' : 'ABSENT';
+
+            await Attendance.findOneAndUpdate(
+              {
+                schoolId: session.schoolId,
+                branchId: std.branchId,
+                studentId: std._id,
+                date: attendanceDate,
+              },
+              {
+                schoolId: session.schoolId,
+                branchId: std.branchId,
+                studentId: std._id,
+                classId: session.classId,
+                sectionId: session.sectionId || std.sectionId,
+                date: attendanceDate,
+                status: finalStatus,
+                remarks: `Auto-marked from live class: ${session.title}`,
+                recordedBy,
+              },
+              { upsert: true, new: true }
+            );
+          }
+          console.log(`[Auto-Attendance] Marked attendance for ${allStudents.length} students of live class: ${session.title}`);
+        } catch (attError) {
+          console.error('[Auto-Attendance] Failed to auto-mark attendance:', attError);
+        }
+      }
+
+      sendResponse(res, 200, 'Live class updated', session);
     } catch (error) {
       next(error);
     }

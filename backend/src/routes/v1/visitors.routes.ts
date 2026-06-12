@@ -6,7 +6,10 @@ import {
   getPreApproved,
   getBlacklist,
   createLog,
-  checkoutVisitor
+  checkoutVisitor,
+  createGatePass,
+  listGatePasses,
+  verifyGatePass
 } from '../../controllers/visitors.controller.js';
 
 export const visitorsRoutes = Router();
@@ -19,3 +22,8 @@ visitorsRoutes.get('/preapproved', asyncHandler(getPreApproved));
 visitorsRoutes.get('/blacklist', asyncHandler(getBlacklist));
 visitorsRoutes.post('/logs', asyncHandler(createLog));
 visitorsRoutes.put('/logs/:id/checkout', asyncHandler(checkoutVisitor));
+
+// Gate Pass Endpoints
+visitorsRoutes.get('/gate-passes', asyncHandler(listGatePasses));
+visitorsRoutes.post('/gate-passes', asyncHandler(createGatePass));
+visitorsRoutes.post('/gate-passes/verify', asyncHandler(verifyGatePass));

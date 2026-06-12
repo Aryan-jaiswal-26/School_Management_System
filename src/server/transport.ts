@@ -3,7 +3,7 @@
  * Handles bus routes, GPS tracking, and real-time location updates
  */
 
-import { createServerFn } from "@tanstack/react-start/server";
+import { createServerFn } from "@tanstack/react-start";
 import { getDBService, DBError, AuthorizationError } from "~/lib/db-service";
 import { type AppRole } from "~/lib/schemas";
 

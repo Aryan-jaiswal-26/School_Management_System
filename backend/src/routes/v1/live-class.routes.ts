@@ -17,3 +17,4 @@ liveClassRouter.post(
   asyncHandler(LiveClassController.create),
 );
 liveClassRouter.post('/:id/join', asyncHandler(LiveClassController.join));
+liveClassRouter.patch('/:id', requireRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER'), asyncHandler(LiveClassController.update));

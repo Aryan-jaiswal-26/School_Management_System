@@ -3,7 +3,7 @@
  * Handles all attendance marking and retrieval with proper authorization
  */
 
-import { createServerFn } from "@tanstack/react-start/server";
+import { createServerFn } from "@tanstack/react-start";
 import { getDBService, DBError, AuthorizationError, ValidationError } from "~/lib/db-service";
 import {
   AttendanceRecordSchema,

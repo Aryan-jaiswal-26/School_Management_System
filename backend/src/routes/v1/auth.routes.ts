@@ -10,7 +10,9 @@ import {
   forgotPassword, 
   resetPassword,
   updateUserProfile,
-  getPublicSubscriptionPlans
+  getPublicSubscriptionPlans,
+  sendOTP,
+  verifyOTP
 } from "../../controllers/auth.controller.js";
 import { validateBody } from "../../middleware/validate.js";
 import { 
@@ -31,3 +33,8 @@ authRoutes.post("/reset-password", validateBody(resetPasswordSchema), asyncHandl
 authRoutes.get("/plans", asyncHandler(getPublicSubscriptionPlans));
 authRoutes.get("/me", authenticateToken, asyncHandler(getCurrentUser));
 authRoutes.put("/profile", authenticateToken, asyncHandler(updateUserProfile));
+
+// OTP Login endpoints
+authRoutes.post("/send-otp", asyncHandler(sendOTP));
+authRoutes.post("/verify-otp", asyncHandler(verifyOTP));
+

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { AttendanceController } from '../../controllers/attendance.controller.js';
 import { validateRequest } from '../../middleware/validate.js';
+import { asyncHandler } from '../../utils/async-handler.js';
 import { authenticateToken, requireRoles } from '../../middleware/auth.js';
 import { requireParentChildAccess, requireTeacherStudentAccess } from '../../middleware/resource-isolation.js';
 import { requirePermissions } from '../../middleware/rbac.js';
@@ -61,3 +62,7 @@ attendanceRouter.get(
   AttendanceController.getMonthlyEmployeeStats
 );
 // Duplicate student attendance route removed to avoid middleware conflict
+
+// --- QR Code Attendance ---
+attendanceRouter.post('/qr/generate', requireRoles('TEACHER', 'SCHOOL_ADMIN', 'SUPER_ADMIN'), asyncHandler(AttendanceController.generateQR));
+attendanceRouter.post('/qr/scan', requireRoles('STUDENT'), asyncHandler(AttendanceController.scanQR));

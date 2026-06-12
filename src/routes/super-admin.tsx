@@ -18,10 +18,13 @@ import {
   Send,
   FileText,
   Settings,
-  ToggleRight
+  ToggleRight,
+  Sun,
+  Moon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SuperAdminProvider, useSuperAdmin } from "@/components/super-admin/super-admin-context";
+import { useTheme } from "@/lib/theme-context";
 import { Toaster } from "sonner";
 import { PageContent } from "@/components/page-ui";
 
@@ -123,6 +126,7 @@ function SuperAdminLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   const { activeImpersonation, exitImpersonation, isAuthenticated, isLoading, logout } = useSuperAdmin();
 
@@ -355,6 +359,16 @@ function SuperAdminLayout() {
                 <span className="h-1.5 w-1.5 rounded-full bg-rose-500 animate-ping" />
                 Root Controller
               </span>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted cursor-pointer"
+                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {theme === "dark" ? <Sun className="h-4.5 w-4.5 text-muted-foreground" /> : <Moon className="h-4.5 w-4.5 text-muted-foreground" />}
+              </button>
 
               <button
                 type="button"

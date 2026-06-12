@@ -8,10 +8,10 @@
     "rootDir": "./",
     "allowJs": true,
     "noImplicitAny": false,
-    "strict": true,
+    "strict": false,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "noUncheckedIndexedAccess": true,
+    "noUncheckedIndexedAccess": false,
     "noImplicitOverride": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true

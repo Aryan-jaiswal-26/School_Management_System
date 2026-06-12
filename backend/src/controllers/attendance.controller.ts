@@ -329,4 +329,82 @@ export class AttendanceController {
       next(error);
     }
   }
+
+  static generateQR = async (req: any, res: Response, next: NextFunction) => {
+    try {
+      const schoolId = req.user?.schoolId;
+      const teacherId = req.user?.id;
+      const { classId, subjectId, period, date } = req.body;
+
+      const { AttendanceQRSession } = await import('../models/AttendanceQRSession.js');
+
+      // Deactivate any existing active session for this class/period/date
+      await AttendanceQRSession.updateMany(
+        { classId, date: new Date(date), period, isActive: true },
+        { isActive: false }
+      );
+
+      const qrToken = `QR-${schoolId}-${classId}-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      const session = await AttendanceQRSession.create({
+        schoolId,
+        classId,
+        teacherId,
+        subjectId,
+        period,
+        date: new Date(date),
+        qrToken,
+        expiresAt,
+      });
+
+      return sendResponse(res, 201, 'QR session created', { session, qrToken, expiresAt });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  static scanQR = async (req: any, res: Response, next: NextFunction) => {
+    try {
+      const studentId = req.user?.studentId || req.user?.id;
+      const schoolId = req.user?.schoolId;
+      const { qrToken } = req.body;
+
+      const { AttendanceQRSession } = await import('../models/AttendanceQRSession.js');
+      const { Attendance } = await import('../models/Attendance.js');
+
+      const session = await AttendanceQRSession.findOne({ qrToken, isActive: true });
+      if (!session) return sendResponse(res, 404, 'Invalid or expired QR code', null);
+
+      if (new Date() > session.expiresAt) {
+        session.isActive = false;
+        await session.save();
+        return sendResponse(res, 400, 'QR code has expired', null);
+      }
+
+      if (session.scannedStudents.map(id => id.toString()).includes(studentId?.toString())) {
+        return sendResponse(res, 400, 'Attendance already marked', null);
+      }
+
+      session.scannedStudents.push(studentId);
+      await session.save();
+
+      // Mark attendance as present
+      await Attendance.findOneAndUpdate(
+        {
+          schoolId,
+          studentId,
+          classId: session.classId,
+          date: session.date,
+          period: session.period,
+        },
+        { status: 'present', markedVia: 'qr' },
+        { upsert: true, new: true }
+      );
+
+      return sendResponse(res, 200, 'Attendance marked via QR', { message: 'Present marked successfully' });
+    } catch (error) {
+      next(error);
+    }
+  };
 }

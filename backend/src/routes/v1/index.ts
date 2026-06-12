@@ -57,6 +57,19 @@ import { ptmRouter } from './ptm.routes.js';
 import { liveClassRouter } from './live-class.routes.js';
 import { emergencyRouter } from './emergency.routes.js';
 import { electionRoutes as electionRouter } from './election.routes.js';
+import { lessonPlanRouter } from './lesson-plan.routes.js';
+import { feedRouter } from './feed.routes.js';
+import { portfolioRouter } from './portfolio.routes.js';
+import { suggestionRouter } from './suggestion.routes.js';
+import { communityRouter } from './community.routes.js';
+import { feedbackRouter } from './feedback.routes.js';
+import { auditRouter } from './audit.routes.js';
+import { supportRouter } from './support.routes.js';
+import { safetyRouter } from './safety.routes.js';
+import { certificateRouter } from './certificate.routes.js';
+import { calendarRouter } from './calendar.routes.js';
+import { studentOfMonthRouter } from './student-of-month.routes.js';
+import { gstInvoiceRouter } from './gst-invoice.routes.js';
 
 export const v1Router = Router();
 
@@ -140,6 +153,19 @@ v1Router.use("/timetable", timetableRouter);
 v1Router.use("/branding", brandingRouter);
 v1Router.use("/branches", branchRouter);
 v1Router.use("/elections", electionRouter);
+v1Router.use('/lesson-plans', lessonPlanRouter);
+v1Router.use('/feed', feedRouter);
+v1Router.use('/portfolio', portfolioRouter);
+v1Router.use('/suggestions', suggestionRouter);
+v1Router.use('/community', communityRouter);
+v1Router.use('/feedback', feedbackRouter);
+v1Router.use('/audit', auditRouter);
+v1Router.use('/support', supportRouter);
+v1Router.use('/safety', safetyRouter);
+v1Router.use('/certificates', certificateRouter);
+v1Router.use('/calendar', calendarRouter);
+v1Router.use('/student-of-month', studentOfMonthRouter);
+v1Router.use('/gst-invoices', gstInvoiceRouter);
 
 // Birthdays endpoint
 import { Student } from '../../models/Student.js';

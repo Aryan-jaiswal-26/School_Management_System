@@ -20,6 +20,7 @@ export interface ILiveClassSession extends Document, IAuditFields {
   recordingUrl?: string;
   studyMaterialLinks: string[];
   status: LiveClassStatus;
+  attendees?: { studentId: Types.ObjectId; joinedAt: Date }[];
   createdBy?: Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -42,6 +43,12 @@ const liveClassSessionSchema = new Schema<ILiveClassSession>(
     recordingUrl: { type: String },
     studyMaterialLinks: [{ type: String }],
     status: { type: String, enum: ['SCHEDULED', 'LIVE', 'ENDED', 'CANCELLED'], default: 'SCHEDULED' },
+    attendees: [
+      {
+        studentId: { type: Schema.Types.ObjectId, ref: 'Student' },
+        joinedAt: { type: Date, default: Date.now },
+      },
+    ],
     ...auditSchemaDefinition,
   },
   { timestamps: true },

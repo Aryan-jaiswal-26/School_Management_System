@@ -3,7 +3,7 @@
  * Handles grade recording and retrieval with authorization
  */
 
-import { createServerFn } from "@tanstack/react-start/server";
+import { createServerFn } from "@tanstack/react-start";
 import { getDBService, DBError, AuthorizationError, ValidationError } from "~/lib/db-service";
 import { AcademicGradeSchema, BulkGradesInputSchema, type AppRole } from "~/lib/schemas";
 

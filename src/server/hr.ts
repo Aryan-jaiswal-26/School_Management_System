@@ -3,7 +3,7 @@
  * Handles leave requests, approvals, and staff management
  */
 
-import { createServerFn } from "@tanstack/react-start/server";
+import { createServerFn } from "@tanstack/react-start";
 import { getDBService, DBError, AuthorizationError } from "~/lib/db-service";
 import { LeaveRequestSchema, type AppRole } from "~/lib/schemas";
 

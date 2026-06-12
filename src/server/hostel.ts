@@ -3,7 +3,7 @@
  * Handles room allocation, complaints, and visitor management
  */
 
-import { createServerFn } from "@tanstack/react-start/server";
+import { createServerFn } from "@tanstack/react-start";
 import { getDBService, DBError, AuthorizationError } from "~/lib/db-service";
 import { HostelComplaintSchema, type AppRole } from "~/lib/schemas";
 

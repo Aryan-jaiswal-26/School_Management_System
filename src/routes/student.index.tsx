@@ -11,6 +11,7 @@ import {
   Video,
   MonitorUp,
   ExternalLink,
+  PlayCircle,
 } from "lucide-react";
 import {
   RadialBarChart,
@@ -189,7 +190,7 @@ function StudentDashboard() {
       ? new Date(unpaidFees[0].dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
       : "";
   const feeDelta = totalDue > 0 ? `Due ${closestDueDate}` : "All dues cleared";
-  const liveSessions = liveClasses.filter((session) => session.status === "LIVE" || session.status === "SCHEDULED");
+  const liveSessions = liveClasses.filter((session) => session.status === "LIVE" || session.status === "SCHEDULED" || (session.status === "ENDED" && session.recordingUrl));
 
   const openLiveClass = (session: any) => {
     const target = session.meetingLink || "https://meet.google.com/new";
@@ -404,6 +405,8 @@ function StudentDashboard() {
                         className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${
                           session.status === "LIVE"
                             ? "bg-emerald-500/10 text-emerald-600"
+                            : session.status === "ENDED"
+                            ? "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400"
                             : "bg-blue-500/10 text-blue-600"
                         }`}
                       >
@@ -414,13 +417,23 @@ function StudentDashboard() {
                       <div className="text-[10px] text-muted-foreground">
                         {session.teacherName || "Teacher"} · {new Date(session.scheduledAt).toLocaleString()}
                       </div>
-                      <button
-                        onClick={() => openLiveClass(session)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        Join
-                      </button>
+                      {session.status === "ENDED" ? (
+                        <button
+                          onClick={() => window.open(session.recordingUrl, "_blank", "noopener,noreferrer")}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs font-semibold text-emerald-600 hover:bg-emerald-500/20 cursor-pointer"
+                        >
+                          <PlayCircle className="h-3.5 w-3.5" />
+                          Watch Replay
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => openLiveClass(session)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted cursor-pointer"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          {session.status === "LIVE" ? "Join" : "View"}
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}

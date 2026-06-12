@@ -92,22 +92,30 @@ export async function updateNotificationPreferences(payload: Record<string, unkn
 }
 
 export async function fetchCommunityPosts() {
-  const { data } = await apiClient('/parents/community/posts');
+  const { data } = await apiClient('/community');
   return data;
 }
 
 export async function createCommunityPost(payload: Record<string, unknown>) {
-  const { data } = await apiClient('/parents/community/posts', { method: 'POST', data: payload });
+  const { data } = await apiClient('/community', { method: 'POST', data: payload });
   return data;
 }
 
 export async function fetchParentFeedback() {
-  const { data } = await apiClient('/parents/feedback');
+  const { data } = await apiClient('/feedback');
   return data;
 }
 
 export async function submitParentFeedback(payload: Record<string, unknown>) {
-  const { data } = await apiClient('/parents/feedback', { method: 'POST', data: payload });
+  const { data } = await apiClient('/feedback', { method: 'POST', data: payload });
+  return data;
+}
+
+export async function submitAnonymousSuggestion(schoolId: string, content: string, category?: string) {
+  const { data } = await apiClient('/suggestions', {
+    method: 'POST',
+    data: { schoolId, content, category },
+  });
   return data;
 }
 

@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { HeartHandshake, MessageCircle, Send, Star, Ghost, Loader2 } from "lucide-react";
 import { PageHeader, Panel, EmptyState } from "@/components/module-shell";
-import { createCommunityPost, fetchCommunityPosts, fetchParentFeedback, submitParentFeedback } from "@/lib/parent-api";
+import { createCommunityPost, fetchCommunityPosts, fetchParentFeedback, submitParentFeedback, submitAnonymousSuggestion } from "@/lib/parent-api";
+import { useAuth } from "@/lib/auth-context";
 
 export const Route = createFileRoute("/parent/community")({
   head: () => ({ meta: [{ title: "Community & Feedback · Campus OS" }] }),
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/parent/community")({
 });
 
 function Page() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<"forum" | "feedback" | "suggestion">("forum");
   const [posts, setPosts] = useState<any[]>([]);
   const [feedback, setFeedback] = useState<any[]>([]);
@@ -74,17 +76,14 @@ function Page() {
   const submitSuggestion = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!suggestionText) return;
+    if (!user?.schoolId) {
+      toast.error("School context not loaded");
+      return;
+    }
     try {
-      const created = await submitParentFeedback({
-        target: "Anonymous Suggestion Box",
-        rating: 5,
-        feedback: suggestionText,
-        category: "GENERAL",
-        anonymous: true,
-      });
-      setFeedback((prev) => [created, ...prev]);
+      await submitAnonymousSuggestion(user.schoolId, suggestionText, "other");
       setSuggestionText("");
-      toast.success("Anonymous suggestion submitted");
+      toast.success("Anonymous suggestion submitted successfully");
     } catch (error) {
       console.error(error);
       toast.error("Could not submit suggestion");

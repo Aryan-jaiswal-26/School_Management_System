@@ -3,7 +3,7 @@
  * Handles fee records, payments, and financial tracking
  */
 
-import { createServerFn } from "@tanstack/react-start/server";
+import { createServerFn } from "@tanstack/react-start";
 import { getDBService, DBError, AuthorizationError, ValidationError } from "~/lib/db-service";
 import { PaymentLedgerSchema, type AppRole } from "~/lib/schemas";
 

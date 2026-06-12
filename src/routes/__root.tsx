@@ -9,6 +9,8 @@ import {
 } from "@tanstack/react-router";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth-context";
+import { ThemeProvider } from "@/lib/theme-context";
+
 
 import appCss from "../styles.css?url";
 
@@ -112,7 +114,12 @@ function RootShell({ children }: { children: React.ReactNode }) {
           dangerouslySetInnerHTML={{
             __html: `
               try {
-                document.documentElement.classList.remove('dark');
+                const theme = localStorage.getItem('campus-os-theme');
+                if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
               } catch (_) {}
             `,
           }}
@@ -132,15 +139,17 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Outlet />
-        <Toaster
-          position="top-right"
-          richColors
-          closeButton
-          toastOptions={{
-            style: { fontFamily: "'Inter', system-ui, sans-serif" },
-          }}
-        />
+        <ThemeProvider>
+          <Outlet />
+          <Toaster
+            position="top-right"
+            richColors
+            closeButton
+            toastOptions={{
+              style: { fontFamily: "'Inter', system-ui, sans-serif" },
+            }}
+          />
+        </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

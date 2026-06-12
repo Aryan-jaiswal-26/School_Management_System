@@ -1,11 +1,12 @@
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { Bell, Search, ChevronLeft, LogOut, X, GraduationCap, type LucideIcon } from "lucide-react";
+import { Bell, Search, ChevronLeft, LogOut, X, GraduationCap, Sun, Moon, type LucideIcon } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-context";
 import { toast } from "sonner";
 import { PageContent } from "@/components/page-ui";
 import { BranchSelector } from "@/components/BranchSelector";
+import { useTheme } from "@/lib/theme-context";
 
 export type NavGroup = {
   label: string;
@@ -32,6 +33,7 @@ export function ModuleShell({ brand, roleLabel, groups, children }: ModuleShellP
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
 
   const allNavTos = useMemo(() => groups.flatMap((g) => g.items.map((i) => i.to)), [groups]);
   const activeTo = useMemo(() => {
@@ -218,6 +220,16 @@ export function ModuleShell({ brand, roleLabel, groups, children }: ModuleShellP
           </span>
 
           <BranchSelector />
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-muted"
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
 
           <button
             type="button"
