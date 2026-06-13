@@ -304,18 +304,27 @@ export class AnalyticsController {
       console.log('DEBUG DASHBOARD: sId =', sId, 'userId =', userId, 'teacher =', teacher);
       const teacherId = teacher ? teacher._id : new Types.ObjectId();
 
+      // Get all distinct classes this teacher teaches
+      let allClasses = teacher?.classAssignment || [];
+      if (allClasses.length === 0) {
+        allClasses = await Timetable.find({ schoolId: sId, teacherId: teacherId, isDeleted: false }).distinct('classId');
+      }
+      console.log('DEBUG DASHBOARD: allClasses =', allClasses);
+
       // Get today's classes from Timetable
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const today = days[new Date().getDay()];
       
-      const todaysClassesDocs = await Timetable.find({ schoolId: sId, teacherId: teacherId, dayOfWeek: today, isDeleted: false })
+      const todaysClassesDocs = await Timetable.find({ 
+        schoolId: sId, 
+        teacherId: teacherId, 
+        dayOfWeek: today, 
+        isDeleted: false,
+        classId: { $in: allClasses }
+      })
         .populate('classId', 'name')
         .populate('subjectId', 'name')
         .sort('startTime');
-
-      // Get all distinct classes this teacher teaches
-      const allClasses = await Timetable.find({ schoolId: sId, teacherId: teacherId, isDeleted: false }).distinct('classId');
-      console.log('DEBUG DASHBOARD: allClasses =', allClasses);
       
       let totalStudents = 0;
       if (allClasses.length > 0) {
@@ -323,11 +332,6 @@ export class AnalyticsController {
         console.log('DEBUG DASHBOARD: count with allClasses =', totalStudents);
       }
       
-      // If no students found in the teacher's assigned classes, fallback to school-wide count
-      if (!totalStudents || totalStudents === 0) {
-        totalStudents = await Student.countDocuments({ schoolId: sId, isActive: true, isDeleted: { $ne: true } });
-        console.log('DEBUG DASHBOARD: fallback count =', totalStudents);
-      }
       // Ensure totalStudents is a numeric value
       totalStudents = Number(totalStudents) || 0;
 
@@ -338,7 +342,12 @@ export class AnalyticsController {
       const classPerf: any[] = [];
       const teacherSubjects = await Timetable.find({ schoolId: sId, teacherId: teacherId, isDeleted: false }).distinct('subjectId');
       if (teacherSubjects.length > 0) {
-        const results = await Result.find({ schoolId: sId, subjectId: { $in: teacherSubjects } }).populate({ path: 'studentId', populate: { path: 'classId', select: 'name' } });
+        const results = await Result.find({ schoolId: sId, subjectId: { $in: teacherSubjects } })
+          .populate({ 
+            path: 'studentId', 
+            match: { classId: { $in: allClasses } },
+            populate: { path: 'classId', select: 'name' } 
+          });
         const classMap = new Map();
         results.forEach((r: any) => {
           if (r.studentId && r.studentId.classId && r.marksObtained != null && r.maxMarks != null) {

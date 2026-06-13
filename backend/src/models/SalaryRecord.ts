@@ -12,7 +12,7 @@ export interface ISalaryRecord extends Document, IAuditFields {
   allowances: number;
   deductions: number;
   netSalary: number;
-  status: 'PENDING' | 'PAID';
+  status: 'DRAFT' | 'PROCESSED' | 'PAID';
   paidAt?: Date;
   paymentMethod?: string;
   transactionId?: string;
@@ -30,7 +30,7 @@ const salaryRecordSchema = new Schema<ISalaryRecord>(
     allowances: { type: Number, default: 0, min: 0 },
     deductions: { type: Number, default: 0, min: 0 },
     netSalary: { type: Number, required: true, min: 0 },
-    status: { type: String, enum: ['PENDING', 'PAID'], default: 'PENDING' },
+    status: { type: String, enum: ['DRAFT', 'PROCESSED', 'PAID'], default: 'DRAFT' },
     paidAt: { type: Date },
     paymentMethod: { type: String },
     transactionId: { type: String },

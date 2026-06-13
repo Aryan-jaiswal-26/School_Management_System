@@ -6,6 +6,8 @@ import { Class } from '../models/Class.js';
 import { Section } from '../models/Section.js';
 import { Student } from '../models/Student.js';
 import { User } from '../models/User.js';
+import { Employee } from '../models/Employee.js';
+import { ApiError } from '../utils/api-error.js';
 import { Types } from 'mongoose';
 
 // Utility helper to get/create class and section
@@ -70,6 +72,34 @@ export class AttendanceController {
 
       const { classId, sectionId } = await getOrCreateClassAndSection(schoolId, grade, section, userId);
 
+      if (req.user?.role === 'TEACHER') {
+        const employee = await Employee.findOne({
+          userId: req.user.id,
+          schoolId,
+          isDeleted: { $ne: true }
+        }).select('classAssignment sectionAssignment');
+
+        if (!employee) {
+          throw new ApiError(403, 'Teacher profile not found');
+        }
+
+        const assignedClasses = employee.classAssignment || [];
+        const assignedSections = employee.sectionAssignment || [];
+
+        const isClassAssigned = assignedClasses.some((id) => id.toString() === classId.toString());
+
+        const matchingSections = await Section.find({
+          _id: { $in: assignedSections },
+          classId: classId
+        }).select('_id');
+        const validSectionIds = matchingSections.map((s) => s._id.toString());
+        const isSectionAssigned = validSectionIds.length === 0 || validSectionIds.includes(sectionId.toString());
+
+        if (!isClassAssigned || !isSectionAssigned) {
+          throw new ApiError(403, 'Access denied: You cannot mark attendance for a class or section you are not assigned to');
+        }
+      }
+
       // Map status to backend enums. 'LEAVE' maps to 'HALF_DAY'. All other statuses keep uppercase.
       const backendStatus = status.toUpperCase() === 'LEAVE' ? 'HALF_DAY' : status.toUpperCase();
 
@@ -119,10 +149,42 @@ export class AttendanceController {
         return;
       }
 
+      let employee = null;
+      if (req.user?.role === 'TEACHER') {
+        employee = await Employee.findOne({
+          userId: req.user.id,
+          schoolId,
+          isDeleted: { $ne: true }
+        }).select('classAssignment sectionAssignment');
+
+        if (!employee) {
+          throw new ApiError(403, 'Teacher profile not found');
+        }
+      }
+
       const results = [];
       for (const rec of records) {
         const { session_date, grade, section, student_id, student_name, status, remarks } = rec;
         const { classId, sectionId } = await getOrCreateClassAndSection(schoolId, grade, section, userId);
+
+        if (employee) {
+          const assignedClasses = employee.classAssignment || [];
+          const assignedSections = employee.sectionAssignment || [];
+
+          const isClassAssigned = assignedClasses.some((id) => id.toString() === classId.toString());
+
+          const matchingSections = await Section.find({
+            _id: { $in: assignedSections },
+            classId: classId
+          }).select('_id');
+          const validSectionIds = matchingSections.map((s) => s._id.toString());
+          const isSectionAssigned = validSectionIds.length === 0 || validSectionIds.includes(sectionId.toString());
+
+          if (!isClassAssigned || !isSectionAssigned) {
+            throw new ApiError(403, 'Access denied: You cannot mark attendance for a class or section you are not assigned to');
+          }
+        }
+
         const backendStatus = status.toUpperCase() === 'LEAVE' ? 'HALF_DAY' : status.toUpperCase();
         const attendanceRecord = await Attendance.findOneAndUpdate(
           {
@@ -172,23 +234,76 @@ export class AttendanceController {
         match.date = queryDate;
       }
 
-      if (grade) {
-        let className = grade as string;
-        if (!className.toLowerCase().startsWith('grade')) {
-          className = `Grade ${className}`;
-        }
-        const classDoc = await Class.findOne({ schoolId: new Types.ObjectId(schoolId as string), name: className });
-        if (classDoc) match.classId = classDoc._id;
-      }
+      if (req.user?.role === 'TEACHER') {
+        const employee = await Employee.findOne({
+          userId: req.user.id,
+          schoolId,
+          isDeleted: { $ne: true }
+        }).select('classAssignment sectionAssignment');
 
-      if (section) {
-        const classDocMatch = match.classId ? { classId: match.classId } : {};
-        const sectionDoc = await Section.findOne({
-          schoolId: new Types.ObjectId(schoolId as string),
-          ...classDocMatch,
-          name: section as string
-        });
-        if (sectionDoc) match.sectionId = sectionDoc._id;
+        if (!employee) {
+          throw new ApiError(403, 'Teacher profile not found');
+        }
+
+        const assignedClasses = employee.classAssignment || [];
+        const assignedSections = employee.sectionAssignment || [];
+
+        if (grade) {
+          let className = grade as string;
+          if (!className.toLowerCase().startsWith('grade')) {
+            className = `Grade ${className}`;
+          }
+          const classDoc = await Class.findOne({ schoolId: new Types.ObjectId(schoolId as string), name: className });
+          if (!classDoc || !assignedClasses.some((id) => id.toString() === classDoc._id.toString())) {
+            throw new ApiError(403, 'Access denied: You are not assigned to this class');
+          }
+          match.classId = classDoc._id;
+        } else {
+          match.classId = { $in: assignedClasses };
+        }
+
+        const targetClassIds = match.classId && (match.classId as any).$in ? (match.classId as any).$in : (match.classId ? [match.classId] : assignedClasses);
+
+        // Find assigned sections that belong to the target classes
+        const matchingSections = await Section.find({
+          _id: { $in: assignedSections },
+          classId: { $in: targetClassIds }
+        }).select('_id');
+        const validSectionIds = matchingSections.map((s) => s._id);
+
+        if (section) {
+          const classDocMatch = match.classId ? { classId: match.classId } : {};
+          const sectionDoc = await Section.findOne({
+            schoolId: new Types.ObjectId(schoolId as string),
+            ...classDocMatch,
+            name: section as string
+          });
+          if (!sectionDoc || !assignedSections.some((id) => id.toString() === sectionDoc._id.toString())) {
+            throw new ApiError(403, 'Access denied: You are not assigned to this section');
+          }
+          match.sectionId = sectionDoc._id;
+        } else if (validSectionIds.length > 0) {
+          match.sectionId = { $in: validSectionIds };
+        }
+      } else {
+        if (grade) {
+          let className = grade as string;
+          if (!className.toLowerCase().startsWith('grade')) {
+            className = `Grade ${className}`;
+          }
+          const classDoc = await Class.findOne({ schoolId: new Types.ObjectId(schoolId as string), name: className });
+          if (classDoc) match.classId = classDoc._id;
+        }
+
+        if (section) {
+          const classDocMatch = match.classId ? { classId: match.classId } : {};
+          const sectionDoc = await Section.findOne({
+            schoolId: new Types.ObjectId(schoolId as string),
+            ...classDocMatch,
+            name: section as string
+          });
+          if (sectionDoc) match.sectionId = sectionDoc._id;
+        }
       }
 
       const records = await Attendance.find(match);

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
-<<<<<<< HEAD
+import mongoose from 'mongoose';
 import { AuditLog } from '../models/AuditLog.js';
+import { ActivityLog } from '../models/ActivityLog.js';
 import { User } from '../models/User.js';
 import { sendResponse } from '../utils/response.js';
 
@@ -69,11 +70,8 @@ export async function getAuditLogs(req: Request, res: Response) {
     });
   } catch (error: any) {
     return sendResponse(res, 500, error.message || 'Failed to retrieve audit logs', null);
-=======
-import mongoose from 'mongoose';
-import { AuditLog } from '../models/AuditLog.js';
-import { ActivityLog } from '../models/ActivityLog.js';
-import { sendResponse } from '../utils/response.js';
+  }
+}
 
 export class AuditController {
   /**
@@ -136,7 +134,7 @@ export class AuditController {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('userId', 'name email role')
+        .populate('userId', 'firstName lastName email role')
         .lean(),
       AuditLog.countDocuments(filter),
     ]);
@@ -202,7 +200,7 @@ export class AuditController {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
-        .populate('userId', 'name email role')
+        .populate('userId', 'firstName lastName email role')
         .lean(),
       ActivityLog.countDocuments(filter),
     ]);
@@ -240,10 +238,14 @@ export class AuditController {
       ActivityLog.countDocuments(filter),
     ]);
 
-    return sendResponse(res, 200, 'My activity fetched successfully', {
-      logs,
-      pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+    return res.json({
+      success: true,
+      message: 'My activity fetched successfully',
+      data: {
+        logs,
+        pagination: { page, limit, total, pages: Math.ceil(total / limit) },
+      }
     });
->>>>>>> bd1bbb0 (Live Class)
   }
 }
+

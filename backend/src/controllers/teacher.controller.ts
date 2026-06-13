@@ -4,6 +4,9 @@ import { Announcement } from '../models/Announcement.js';
 import { Employee } from '../models/Employee.js'; // Assuming Employee model represents teachers
 import { User } from '../models/User.js';
 import { Timetable } from '../models/Timetable.js';
+import { Subject } from '../models/Subject.js';
+import { Class } from '../models/Class.js';
+import { Section } from '../models/Section.js';
 // Placeholder models for live classes and exam insights can be added later.
 
 export class TeacherController {
@@ -39,9 +42,17 @@ export class TeacherController {
   static async getTeacherProfile(req: Request, res: Response, next: NextFunction) {
     try {
       const id = req.params.id || (req as any).user.id;
-      let teacher = await Employee.findOne({ userId: id, employeeType: 'TEACHING' }).lean();
+      let teacher = await Employee.findOne({ userId: id, employeeType: 'TEACHING' })
+        .populate('subjects', 'name code')
+        .populate('classAssignment', 'name')
+        .populate('sectionAssignment', 'name')
+        .lean();
       if (!teacher) {
-        teacher = await Employee.findOne({ _id: id, employeeType: 'TEACHING' }).lean();
+        teacher = await Employee.findOne({ _id: id, employeeType: 'TEACHING' })
+          .populate('subjects', 'name code')
+          .populate('classAssignment', 'name')
+          .populate('sectionAssignment', 'name')
+          .lean();
       }
       if (!teacher) {
         return res.json({ data: null });
@@ -86,7 +97,19 @@ export class TeacherController {
         return;
       }
 
-      const { name, phone, bio } = req.body;
+      const { 
+        name, 
+        phone, 
+        bio,
+        alternateMobileNumber,
+        gender,
+        dateOfBirth,
+        bloodGroup,
+        address,
+        city,
+        state,
+        zipCode
+      } = req.body;
 
       if (name) {
         const parts = name.trim().split(/\s+/);
@@ -95,16 +118,35 @@ export class TeacherController {
       }
       if (phone !== undefined) {
         user.phoneNumber = phone;
+        teacher.mobileNumber = phone;
+      }
+      if (address !== undefined) {
+        user.address = address;
+        teacher.address = address;
       }
       await user.save();
 
-      if (bio !== undefined) {
-        teacher.bio = bio;
-        await teacher.save();
+      if (bio !== undefined) teacher.bio = bio;
+      if (alternateMobileNumber !== undefined) teacher.alternateMobileNumber = alternateMobileNumber;
+      if (gender !== undefined) teacher.gender = gender;
+      if (dateOfBirth !== undefined) {
+        teacher.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : undefined;
       }
+      if (bloodGroup !== undefined) teacher.bloodGroup = bloodGroup;
+      if (city !== undefined) teacher.city = city;
+      if (state !== undefined) teacher.state = state;
+      if (zipCode !== undefined) teacher.zipCode = zipCode;
+      
+      await teacher.save();
+
+      const populatedTeacher = await Employee.findById(teacher._id)
+        .populate('subjects', 'name code')
+        .populate('classAssignment', 'name')
+        .populate('sectionAssignment', 'name')
+        .lean();
 
       const profile = {
-        ...teacher.toObject(),
+        ...populatedTeacher,
         name: `${user.firstName} ${user.lastName}`,
         phone: user.phoneNumber || '',
         bio: teacher.bio || '',

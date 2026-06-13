@@ -1,11 +1,32 @@
 import { Request, Response } from 'express';
 import { PTM } from '../models/PTM.js';
+import { Employee } from '../models/Employee.js';
+import { ApiError } from '../utils/api-error.js';
 import { sendResponse } from '../utils/response.js';
 
 export class PTMController {
   static async createMeeting(req: Request, res: Response) {
     const schoolId = req.user?.schoolId || req.body.schoolId;
     
+    if (req.user?.role === 'TEACHER') {
+      const employee = await Employee.findOne({
+        userId: req.user.id,
+        schoolId,
+        isDeleted: { $ne: true }
+      }).select('classAssignment');
+
+      if (!employee) {
+        throw new ApiError(403, 'Teacher profile not found');
+      }
+
+      const assignedClasses = employee.classAssignment || [];
+      const isAssigned = assignedClasses.some((id) => id.toString() === req.body.classId?.toString());
+
+      if (!isAssigned) {
+        throw new ApiError(403, 'Access denied: You cannot create a PTM for a class you are not assigned to');
+      }
+    }
+
     // Auto generate slots based on start/end time and duration
     const { startTime, endTime, slotDurationMinutes, ...rest } = req.body;
     const slots: any[] = [];
@@ -35,7 +56,13 @@ export class PTMController {
 
   static async getMeetings(req: Request, res: Response) {
     const schoolId = req.user?.schoolId;
-    const ptms = await PTM.find({ schoolId })
+    const match: any = { schoolId };
+
+    if (req.user?.role === 'TEACHER') {
+      match.teacherId = req.user.id;
+    }
+
+    const ptms = await PTM.find(match)
       .populate('teacherId', 'firstName lastName')
       .populate('classId', 'name')
       .populate('slots.studentId', 'user')

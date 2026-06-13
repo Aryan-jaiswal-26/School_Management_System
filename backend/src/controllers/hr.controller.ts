@@ -3,6 +3,8 @@ import { sendResponse } from '../utils/response.js';
 import { LeaveRequest } from '../models/LeaveRequest.js';
 import { Employee } from '../models/Employee.js';
 import { User } from '../models/User.js';
+import { EmployeeAttendance } from '../models/EmployeeAttendance.js';
+import { logAuditEvent } from '../utils/audit.js';
 import { Types } from 'mongoose';
 
 async function getOrCreateEmployee(schoolId: Types.ObjectId, userId: Types.ObjectId) {
@@ -21,6 +23,70 @@ async function getOrCreateEmployee(schoolId: Types.ObjectId, userId: Types.Objec
     await emp.save();
   }
   return emp;
+}
+
+async function syncLeaveWithAttendanceAndStatus(schoolId: Types.ObjectId, employeeId: Types.ObjectId, startDate: Date, endDate: Date, approvedByUserId: Types.ObjectId) {
+  const emp = await Employee.findById(employeeId);
+  if (emp) {
+    emp.employmentStatus = 'ON_LEAVE';
+    await emp.save();
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const attendanceOps = [];
+    
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      attendanceOps.push({
+        updateOne: {
+          filter: {
+            schoolId,
+            employeeId,
+            date: new Date(d)
+          },
+          update: {
+            $set: {
+              status: 'ON_LEAVE',
+              recordedBy: approvedByUserId
+            }
+          },
+          upsert: true
+        }
+      });
+    }
+    
+    if (attendanceOps.length > 0) {
+      await EmployeeAttendance.bulkWrite(attendanceOps);
+    }
+    
+    // Recalculate attendance stats
+    const allRecords = await EmployeeAttendance.find({ schoolId, employeeId });
+    let presentCount = 0;
+    let absentCount = 0;
+    let lateCount = 0;
+    let halfDayCount = 0;
+    let leaveCount = 0;
+    let newestDate: Date | null = null;
+    
+    for (const r of allRecords) {
+       if (r.status === 'PRESENT') presentCount++;
+       else if (r.status === 'ABSENT') absentCount++;
+       else if (r.status === 'LATE') lateCount++;
+       else if (r.status === 'HALF_DAY') halfDayCount++;
+       else if (r.status === 'ON_LEAVE') leaveCount++;
+       
+       if (!newestDate || r.date.getTime() > newestDate.getTime()) {
+          newestDate = r.date;
+       }
+    }
+    
+    const totalDays = presentCount + absentCount + lateCount + halfDayCount + leaveCount;
+    const presentEquivalent = presentCount + lateCount + (halfDayCount * 0.5) + leaveCount;
+    const attendancePercent = totalDays > 0 ? Math.round((presentEquivalent / totalDays) * 100) : 100;
+    
+    emp.attendancePercent = attendancePercent;
+    if (newestDate) emp.lastAttendanceDate = newestDate;
+    await emp.save();
+  }
 }
 
 function getDisplayLeaveType(backendType: string): string {
@@ -217,6 +283,17 @@ export class HRController {
       leave.approvedBy = new Types.ObjectId(userId as string);
       await leave.save();
 
+      // Sync leave with daily attendance and update status to ON_LEAVE
+      await syncLeaveWithAttendanceAndStatus(
+        leave.schoolId,
+        leave.employeeId,
+        leave.startDate,
+        leave.endDate,
+        leave.approvedBy
+      );
+
+      await logAuditEvent(req, 'APPROVE_LEAVE', 'HR', leave._id, { after: { status: 'APPROVED' } });
+
       const emp = await Employee.findById(leave.employeeId);
       const userDoc = emp ? await User.findById(emp.userId) : null;
       const approverDoc = await User.findById(leave.approvedBy);
@@ -285,6 +362,19 @@ export class HRController {
       }
 
       await leave.save();
+
+      if (upperStatus === 'APPROVED') {
+        // Sync leave with daily attendance and update status to ON_LEAVE
+        await syncLeaveWithAttendanceAndStatus(
+          leave.schoolId,
+          leave.employeeId,
+          leave.startDate,
+          leave.endDate,
+          leave.approvedBy
+        );
+      }
+
+      await logAuditEvent(req, 'UPDATE_LEAVE_STATUS', 'HR', leave._id, { after: { status: upperStatus } });
 
       const emp = await Employee.findById(leave.employeeId);
       const userDoc = emp ? await User.findById(emp.userId) : null;

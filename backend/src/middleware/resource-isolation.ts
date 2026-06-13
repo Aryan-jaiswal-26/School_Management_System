@@ -3,6 +3,7 @@ import { User } from "../models/User.js";
 import { Student } from "../models/Student.js";
 import { Parent } from "../models/Parent.js";
 import { Class } from "../models/Class.js";
+import { Employee } from "../models/Employee.js";
 import { ApiError } from "../utils/api-error.js";
 
 /**
@@ -95,17 +96,35 @@ export async function requireTeacherStudentAccess(
         return next(new ApiError(404, "Student not found"));
       }
 
-      // Find if the teacher is assigned to this student's class (e.g. as a class teacher)
-      // Assuming Class schema has a classTeacherId
-      const teacherClass = await Class.findOne({ 
-        _id: student.classId,
-        classTeacherId: req.user.id 
-      });
+      // Find the teacher's Employee record
+      const employee = await Employee.findOne({ 
+        userId: req.user.id, 
+        schoolId: req.user.schoolId,
+        isDeleted: { $ne: true }
+      }).select('classAssignment sectionAssignment');
 
-      if (!teacherClass) {
-        // Here you might also check if the teacher is assigned to specific subjects for that class/section
-        // For simplicity, we are checking if they are the class teacher.
-        return next(new ApiError(403, "Access denied: Student is not in your assigned class"));
+      if (!employee) {
+        return next(new ApiError(403, "Access denied: Teacher profile not found"));
+      }
+
+      const assignedClasses = employee.classAssignment || [];
+      const assignedSections = employee.sectionAssignment || [];
+
+      // Check if student's class is in teacher's assigned classes
+      const isClassAssigned = assignedClasses.some(
+        (classId) => classId.toString() === student.classId?.toString()
+      );
+
+      // Optional check for section if sectionAssignment is not empty and student has a sectionId
+      let isSectionAssigned = true;
+      if (assignedSections.length > 0 && student.sectionId) {
+        isSectionAssigned = assignedSections.some(
+          (secId) => secId.toString() === student.sectionId?.toString()
+        );
+      }
+
+      if (!isClassAssigned || !isSectionAssigned) {
+        return next(new ApiError(403, "Access denied: Student is not in your assigned class or section"));
       }
     }
 

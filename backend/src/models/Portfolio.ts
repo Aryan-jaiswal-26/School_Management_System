@@ -51,7 +51,6 @@ const PortfolioSchema = new Schema<IPortfolio>(
   { timestamps: true },
 );
 
-PortfolioSchema.index({ studentId: 1 }, { unique: true });
 PortfolioSchema.index({ schoolId: 1, studentId: 1 });
 
 export const Portfolio = mongoose.model<IPortfolio>('Portfolio', PortfolioSchema);

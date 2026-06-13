@@ -12,6 +12,8 @@ import { Timetable } from '../models/Timetable.js';
 import { AdmissionLead } from '../models/AdmissionLead.js';
 import { Types } from 'mongoose';
 import { AcademicsService } from '../services/academics.service.js';
+import { Employee } from '../models/Employee.js';
+import { ApiError } from '../utils/api-error.js';
 
 // Utility helper to get/create class and section
 async function getOrCreateClassAndSection(
@@ -469,7 +471,20 @@ export class AcademicsController {
       const schoolId = req.user?.schoolId || "000000000000000000000001";
       const { page, limit, search, branchId } = req.query as any;
       const allowedBranchIds = req.user?.role === 'SUPER_ADMIN' ? undefined : req.user?.allowedBranchIds;
-      const result = await AcademicsService.listClasses(schoolId, Number(page) || 1, Number(limit) || 10, search as string, branchId as string, allowedBranchIds);
+
+      let allowedClassIds: any[] | undefined = undefined;
+      if (req.user?.role === 'TEACHER') {
+        const employee = await Employee.findOne({
+          userId: req.user.id,
+          schoolId,
+          isDeleted: { $ne: true }
+        }).select('classAssignment');
+        if (employee) {
+          allowedClassIds = employee.classAssignment || [];
+        }
+      }
+
+      const result = await AcademicsService.listClasses(schoolId, Number(page) || 1, Number(limit) || 10, search as string, branchId as string, allowedBranchIds, allowedClassIds);
       sendResponse(res, 200, 'Classes retrieved', result);
     } catch (error) {
       next(error);
@@ -512,14 +527,55 @@ export class AcademicsController {
       const schoolId = req.user?.schoolId || "000000000000000000000001";
       const { page, limit, search, classId, branchId } = req.query as any;
       const allowedBranchIds = req.user?.role === 'SUPER_ADMIN' ? undefined : req.user?.allowedBranchIds;
+
+      let classFilter = classId;
+      let allowedSectionIds: any[] | undefined = undefined;
+
+      if (req.user?.role === 'TEACHER') {
+        const employee = await Employee.findOne({
+          userId: req.user.id,
+          schoolId,
+          isDeleted: { $ne: true }
+        }).select('classAssignment sectionAssignment');
+
+        if (employee) {
+          const assignedClasses = employee.classAssignment || [];
+          const assignedSections = employee.sectionAssignment || [];
+
+          if (classId) {
+            const isAssigned = assignedClasses.some((id) => id.toString() === classId);
+            if (!isAssigned) {
+              throw new ApiError(403, 'Access denied: You are not assigned to this class');
+            }
+            classFilter = classId;
+          } else {
+            classFilter = { $in: assignedClasses.map((id) => id.toString()) };
+          }
+
+          const targetClassIds = classId ? [new Types.ObjectId(classId)] : assignedClasses;
+          const matchingSections = await Section.find({
+            _id: { $in: assignedSections },
+            classId: { $in: targetClassIds }
+          }).select('_id');
+          const validSectionIds = matchingSections.map((s) => s._id.toString());
+
+          if (validSectionIds.length > 0) {
+            allowedSectionIds = validSectionIds;
+          } else {
+            allowedSectionIds = undefined;
+          }
+        }
+      }
+
       const result = await AcademicsService.listSections(
         schoolId,
         Number(page) || 1,
         Number(limit) || 10,
         search as string,
-        classId as string,
+        classFilter,
         branchId as string,
         allowedBranchIds,
+        allowedSectionIds,
       );
       sendResponse(res, 200, 'Sections retrieved', result);
     } catch (error) {

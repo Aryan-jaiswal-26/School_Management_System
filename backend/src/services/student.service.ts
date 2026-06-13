@@ -242,8 +242,20 @@ export class StudentService {
 
     if (isActive !== undefined) match.isActive = isActive;
     if (tcStatus) match.tcStatus = tcStatus;
-    if (classId) match.classId = new Types.ObjectId(classId);
-    if (sectionId) match.sectionId = new Types.ObjectId(sectionId);
+    if (classId) {
+      if (typeof classId === 'object' && classId.$in) {
+        match.classId = { $in: classId.$in.map((id: any) => new Types.ObjectId(id)) };
+      } else {
+        match.classId = new Types.ObjectId(classId as string);
+      }
+    }
+    if (sectionId) {
+      if (typeof sectionId === 'object' && sectionId.$in) {
+        match.sectionId = { $in: sectionId.$in.map((id: any) => new Types.ObjectId(id)) };
+      } else {
+        match.sectionId = new Types.ObjectId(sectionId as string);
+      }
+    }
 
     if (query.branchId) {
       match.branchId = new Types.ObjectId(query.branchId as string);

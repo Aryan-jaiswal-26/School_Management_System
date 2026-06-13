@@ -27,14 +27,17 @@ function toObjectId(value: string | Types.ObjectId): Types.ObjectId {
 
 export class AcademicsService {
   // --- Classes ---
-  static async listClasses(schoolIdInput: string, page: number, limit: number, search?: string, branchId?: string, allowedBranchIds?: any[]): Promise<PaginationResult<any>> {
+  static async listClasses(schoolIdInput: string, page: number, limit: number, search?: string, branchId?: string, allowedBranchIds?: any[], allowedClassIds?: any[]): Promise<PaginationResult<any>> {
     const schoolId = await resolveSchoolId(schoolIdInput);
-    const query: Record<string, unknown> = { schoolId };
+    const query: Record<string, any> = { schoolId };
     if (search) query.name = { $regex: search, $options: "i" };
     if (branchId) {
       query.branchId = new Types.ObjectId(branchId);
     } else if (allowedBranchIds && allowedBranchIds.length > 0) {
       query.branchId = { $in: allowedBranchIds.map((id: any) => new Types.ObjectId(id)) };
+    }
+    if (allowedClassIds) {
+      query._id = { $in: allowedClassIds.map((id: any) => new Types.ObjectId(id)) };
     }
 
     const total = await Class.countDocuments(query);
@@ -101,15 +104,33 @@ export class AcademicsService {
   }
 
   // --- Sections ---
-  static async listSections(schoolIdInput: string, page: number, limit: number, search?: string, classId?: string, branchId?: string, allowedBranchIds?: any[]): Promise<PaginationResult<any>> {
+  static async listSections(
+    schoolIdInput: string,
+    page: number,
+    limit: number,
+    search?: string,
+    classId?: any,
+    branchId?: string,
+    allowedBranchIds?: any[],
+    allowedSectionIds?: any[]
+  ): Promise<PaginationResult<any>> {
     const schoolId = await resolveSchoolId(schoolIdInput);
-    const query: Record<string, unknown> = { schoolId };
+    const query: Record<string, any> = { schoolId };
     if (search) query.name = { $regex: search, $options: "i" };
-    if (classId) query.classId = classId;
+    if (classId) {
+      if (typeof classId === 'string') {
+        query.classId = new Types.ObjectId(classId);
+      } else {
+        query.classId = classId;
+      }
+    }
     if (branchId) {
       query.branchId = new Types.ObjectId(branchId);
     } else if (allowedBranchIds && allowedBranchIds.length > 0) {
       query.branchId = { $in: allowedBranchIds.map((id: any) => new Types.ObjectId(id)) };
+    }
+    if (allowedSectionIds && allowedSectionIds.length > 0) {
+      query._id = { $in: allowedSectionIds.map((id: any) => new Types.ObjectId(id)) };
     }
 
     const total = await Section.countDocuments(query);
