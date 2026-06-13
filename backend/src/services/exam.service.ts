@@ -56,9 +56,15 @@ export class ExamService {
     return exam;
   }
 
-  static async listExams(schoolId: string, classId?: string) {
+  static async listExams(schoolId: string, classId?: any) {
     const match: any = { schoolId: new Types.ObjectId(schoolId) };
-    if (classId) match.classId = new Types.ObjectId(classId);
+    if (classId) {
+      if (typeof classId === 'object' && classId.$in) {
+        match.classId = { $in: classId.$in.map((id: any) => new Types.ObjectId(id)) };
+      } else {
+        match.classId = new Types.ObjectId(classId as string);
+      }
+    }
     return Exam.find(match).sort({ startDate: -1 });
   }
 

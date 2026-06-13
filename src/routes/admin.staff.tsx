@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { Search, Plus, Eye, X, Users, Loader2, User, UploadCloud, ArrowLeft } from "lucide-react";
+import { Search, Plus, Eye, X, Users, Loader2, User, UploadCloud, ArrowLeft, Edit, Calendar, Wallet, FileText, Star, Download } from "lucide-react";
 import { PageHeader, Panel, EmptyState } from "@/components/module-shell";
 import { apiClient, API_BASE_URL } from "@/lib/api-client";
 
@@ -14,9 +14,15 @@ function Page() {
   const [staff, setStaff] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [deptFilter, setDeptFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
   const [viewStaff, setViewStaff] = useState<any | null>(null);
+
+  // Profile modal states
+  const [activeModalTab, setActiveModalTab] = useState<"details" | "edit" | "attendance" | "salary" | "leave">("details");
+  const [selectedStaffProfile, setSelectedStaffProfile] = useState<any | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [updatingProfile, setUpdatingProfile] = useState(false);
 
   const fetchStaff = async () => {
     try {
@@ -31,15 +37,71 @@ function Page() {
     }
   };
 
+  const handleOpenStaffModal = async (s: any, tab: "details" | "edit" | "attendance" | "salary" | "leave") => {
+    setViewStaff(s);
+    setActiveModalTab(tab);
+    setSelectedStaffProfile(null);
+    try {
+      setProfileLoading(true);
+      const res: any = await apiClient(`/employees/${s._id}`);
+      setSelectedStaffProfile(res?.data || res);
+    } catch {
+      toast.error("Failed to load staff details");
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!viewStaff) return;
+    const fd = new FormData(e.currentTarget);
+    const payload: Record<string, any> = {};
+    fd.forEach((value, key) => {
+      if (value !== "" && !(value instanceof File)) {
+        payload[key] = value;
+      }
+    });
+    if (payload.basicSalary) payload.basicSalary = Number(payload.basicSalary);
+    if (payload.experience) payload.experience = Number(payload.experience);
+    
+    try {
+      setUpdatingProfile(true);
+      await apiClient(`/employees/${viewStaff._id}`, {
+        method: "PATCH",
+        data: payload
+      });
+      toast.success("Profile updated successfully");
+      fetchStaff();
+      const res: any = await apiClient(`/employees/${viewStaff._id}`);
+      setSelectedStaffProfile(res?.data || res);
+      setActiveModalTab("details");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update profile");
+    } finally {
+      setUpdatingProfile(false);
+    }
+  };
+
+  const downloadPayslip = async (id: string, empId: string) => {
+    try {
+      const url = `${API_BASE_URL}/employees/salaries/${id}/download`;
+      window.open(url, "_blank");
+      toast.success("Payslip PDF download initiated");
+    } catch {
+      toast.error("Failed to download payslip");
+    }
+  };
+
   useEffect(() => {
     fetchStaff();
   }, []);
 
-  const depts = [...new Set(staff.map((s) => s.department).filter(Boolean))].sort();
+  const roles = [...new Set(staff.map((s) => s.designation || s.user?.role).filter(Boolean))].sort();
   const filtered = staff.filter((s) => {
     const fullName = `${s.user?.firstName || ""} ${s.user?.lastName || ""}`.toLowerCase();
     const m1 = fullName.includes(search.toLowerCase());
-    const m2 = deptFilter === "all" || s.department === deptFilter;
+    const m2 = roleFilter === "all" || s.designation === roleFilter || s.user?.role === roleFilter;
     return m1 && m2;
   });
 
@@ -74,14 +136,14 @@ function Page() {
           />
         </div>
         <select
-          value={deptFilter}
-          onChange={(e) => setDeptFilter(e.target.value)}
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
           className="h-10 rounded-lg border border-border bg-card px-3 text-sm"
         >
-          <option value="all">All Departments</option>
-          {depts.map((d) => (
-            <option key={d} value={d}>
-              {d}
+          <option value="all">All Roles</option>
+          {roles.map((r) => (
+            <option key={r} value={r}>
+              {r}
             </option>
           ))}
         </select>
@@ -91,43 +153,96 @@ function Page() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
+                <th className="pb-3 pr-4">Emp ID</th>
+                <th className="pb-3 pr-4">Photo</th>
                 <th className="pb-3 pr-4">Name</th>
                 <th className="pb-3 pr-4">Role</th>
                 <th className="pb-3 pr-4">Department</th>
-                <th className="pb-3 pr-4">Attendance</th>
-                <th className="pb-3 pr-4">Status</th>
-                <th className="pb-3">Actions</th>
+                <th className="pb-3 pr-4 text-center">Attendance %</th>
+                <th className="pb-3 pr-4 text-center">Current Status</th>
+                <th className="pb-3 pr-4 text-right">Monthly Salary</th>
+                <th className="pb-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="py-8 text-center text-muted-foreground">
                     <Loader2 className="mx-auto h-6 w-6 animate-spin" />
                   </td>
                 </tr>
               ) : filtered.map((s) => (
-                <tr key={s._id} className="border-b border-border/50 last:border-0">
+                <tr key={s._id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                  <td className="py-3 pr-4 font-mono text-xs text-muted-foreground">{s.employeeId}</td>
+                  <td className="py-3 pr-4">
+                    <img
+                      src={s.profilePhoto || `https://api.dicebear.com/7.x/adventurer/svg?seed=${s.employeeId}`}
+                      alt="Avatar"
+                      className="h-8 w-8 rounded-full border border-border object-cover bg-card"
+                    />
+                  </td>
                   <td className="py-3 pr-4 font-medium">{s.user?.firstName} {s.user?.lastName}</td>
                   <td className="py-3 pr-4 text-muted-foreground">{s.designation}</td>
-                  <td className="py-3 pr-4">{s.department || "N/A"}</td>
-                  <td className="py-3 pr-4">
-                    <span className="text-[oklch(0.45_0.15_155)]">100%</span>
+                  <td className="py-3 pr-4 text-xs">{s.department || "N/A"}</td>
+                  <td className="py-3 pr-4 text-center font-semibold text-[oklch(0.45_0.15_155)]">
+                    {s.attendancePercent !== undefined ? s.attendancePercent : 100}%
                   </td>
-                  <td className="py-3 pr-4">
+                  <td className="py-3 pr-4 text-center">
                     <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.isActive ? "bg-[oklch(0.65_0.15_155)]/15 text-[oklch(0.45_0.15_155)]" : "bg-muted text-muted-foreground"}`}
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-bold uppercase ${
+                        s.employmentStatus === "ACTIVE"
+                          ? "bg-[oklch(0.65_0.15_155)]/15 text-[oklch(0.45_0.15_155)]"
+                          : s.employmentStatus === "ON_LEAVE"
+                          ? "bg-amber-100 text-amber-700"
+                          : s.employmentStatus === "SUSPENDED"
+                          ? "bg-red-100 text-red-700"
+                          : "bg-muted text-muted-foreground"
+                      }`}
                     >
-                      {s.isActive ? "active" : "inactive"}
+                      {s.employmentStatus ? s.employmentStatus.toLowerCase().replace("_", " ") : "active"}
                     </span>
                   </td>
-                  <td className="py-3">
-                    <button
-                      onClick={() => setViewStaff(s)}
-                      className="grid h-8 w-8 place-items-center rounded-md border border-border hover:bg-muted"
-                    >
-                      <Eye className="h-3.5 w-3.5" />
-                    </button>
+                  <td className="py-3 pr-4 text-right font-semibold">
+                    ₹{(s.basicSalary || 0).toLocaleString()}
+                  </td>
+                  <td className="py-3 text-right">
+                    <div className="flex justify-end gap-1.5">
+                      <button
+                        onClick={() => handleOpenStaffModal(s, "details")}
+                        className="p-1 border border-border rounded hover:bg-muted"
+                        title="View Details & Summary"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenStaffModal(s, "edit")}
+                        className="p-1 border border-border rounded hover:bg-muted"
+                        title="Edit Profile"
+                      >
+                        <Edit className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenStaffModal(s, "attendance")}
+                        className="p-1 border border-border rounded hover:bg-muted"
+                        title="Attendance History"
+                      >
+                        <Calendar className="h-3.5 w-3.5 text-green-600" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenStaffModal(s, "salary")}
+                        className="p-1 border border-border rounded hover:bg-muted"
+                        title="Salary Slips"
+                      >
+                        <Wallet className="h-3.5 w-3.5 text-blue-600" />
+                      </button>
+                      <button
+                        onClick={() => handleOpenStaffModal(s, "leave")}
+                        className="p-1 border border-border rounded hover:bg-muted"
+                        title="Leave Logs"
+                      >
+                        <FileText className="h-3.5 w-3.5 text-amber-600" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -146,19 +261,19 @@ function Page() {
         {filtered.map((s) => (
           <div
             key={s._id}
-            onClick={() => setViewStaff(s)}
+            onClick={() => handleOpenStaffModal(s, "details")}
             className="rounded-xl border border-border bg-card p-4 shadow-sm active:scale-[0.98] transition-all"
           >
             <div className="flex justify-between mb-1">
               <span className="font-semibold">{s.user?.firstName} {s.user?.lastName}</span>
               <span
-                className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.isActive ? "bg-[oklch(0.65_0.15_155)]/15 text-[oklch(0.45_0.15_155)]" : "bg-muted text-muted-foreground"}`}
+                className={`rounded-full px-2 py-0.5 text-xs font-bold uppercase ${s.employmentStatus === "ACTIVE" ? "bg-[oklch(0.65_0.15_155)]/15 text-[oklch(0.45_0.15_155)]" : "bg-muted text-muted-foreground"}`}
               >
-                {s.isActive ? "active" : "inactive"}
+                {s.employmentStatus ? s.employmentStatus.toLowerCase().replace("_", " ") : "active"}
               </span>
             </div>
             <div className="text-xs text-muted-foreground">
-              {s.designation} · {s.department || "N/A"} · 100%
+              {s.designation} · {s.attendancePercent !== undefined ? s.attendancePercent : 100}% · ₹{(s.basicSalary || 0).toLocaleString()}
             </div>
           </div>
         ))}
@@ -167,38 +282,395 @@ function Page() {
       {viewStaff && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setViewStaff(null)}
+          onClick={() => { setViewStaff(null); setSelectedStaffProfile(null); }}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg rounded-2xl bg-card p-6 shadow-xl"
+            className="w-full max-w-3xl rounded-2xl bg-card border border-border p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto"
           >
-            <div className="flex justify-between mb-4">
-              <h2 className="text-lg font-semibold">Staff Profile</h2>
+            <div className="flex justify-between items-center pb-2 border-b border-border/50">
+              <div>
+                <h2 className="text-xl font-bold text-foreground">
+                  {viewStaff.user?.firstName} {viewStaff.user?.lastName}
+                </h2>
+                <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                  ID: {viewStaff.employeeId} · {viewStaff.designation}
+                </p>
+              </div>
               <button
-                onClick={() => setViewStaff(null)}
-                className="grid h-8 w-8 place-items-center rounded-md hover:bg-muted"
+                onClick={() => { setViewStaff(null); setSelectedStaffProfile(null); }}
+                className="grid h-8 w-8 place-items-center rounded-lg hover:bg-muted"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+
+            {/* Modal Tabs */}
+            <div className="flex gap-1 border-b border-border pb-1 overflow-x-auto">
               {[
-                ["Name", `${viewStaff.user?.firstName} ${viewStaff.user?.lastName}`],
-                ["Role", viewStaff.designation],
-                ["Department", viewStaff.department || "N/A"],
-                ["Email", viewStaff.user?.email || "N/A"],
-                ["Phone", viewStaff.phone || "N/A"],
-                ["Join Date", new Date(viewStaff.joiningDate).toLocaleDateString()],
-                ["Salary", `₹${(viewStaff.basicSalary || 0).toLocaleString()}`],
-                ["Status", viewStaff.isActive ? "Active" : "Inactive"],
-              ].map(([l, v]) => (
-                <div key={l}>
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide">{l}</div>
-                  <div className="mt-1 font-medium">{v as React.ReactNode}</div>
-                </div>
+                { key: "details" as const, label: "Profile Details", icon: User },
+                { key: "edit" as const, label: "Edit Details", icon: Edit },
+                { key: "attendance" as const, label: "Attendance History", icon: Calendar },
+                { key: "salary" as const, label: "Salary History", icon: Wallet },
+                { key: "leave" as const, label: "Leave History", icon: FileText }
+              ].map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveModalTab(t.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all shrink-0 ${
+                    activeModalTab === t.key
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <t.icon className="h-3.5 w-3.5" />
+                  {t.label}
+                </button>
               ))}
             </div>
+
+            {profileLoading ? (
+              <div className="py-12 text-center text-muted-foreground">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary mb-2" />
+                Loading detailed records...
+              </div>
+            ) : !selectedStaffProfile ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">
+                Failed to load profile details.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {activeModalTab === "details" && (
+                  <div className="space-y-4">
+                    {/* Stats Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-muted/30 border border-border rounded-xl p-3 text-center">
+                        <div className="text-[10px] uppercase font-bold text-muted-foreground">Attendance %</div>
+                        <div className="text-lg font-bold text-primary mt-1">
+                          {selectedStaffProfile.stats?.attendancePercent || 100}%
+                        </div>
+                      </div>
+                      <div className="bg-muted/30 border border-border rounded-xl p-3 text-center">
+                        <div className="text-[10px] uppercase font-bold text-muted-foreground">Days (P / A / L)</div>
+                        <div className="text-sm font-bold text-foreground mt-1.5">
+                          {selectedStaffProfile.stats?.presentDays || 0} / {selectedStaffProfile.stats?.absentDays || 0} / {selectedStaffProfile.stats?.leaveDays || 0}
+                        </div>
+                      </div>
+                      <div className="bg-muted/30 border border-border rounded-xl p-3 text-center">
+                        <div className="text-[10px] uppercase font-bold text-muted-foreground">Basic Pay</div>
+                        <div className="text-lg font-bold text-foreground mt-1">
+                          ₹{(selectedStaffProfile.basicSalary || 0).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="bg-muted/30 border border-border rounded-xl p-3 text-center">
+                        <div className="text-[10px] uppercase font-bold text-muted-foreground">Rating</div>
+                        <div className="flex items-center justify-center gap-1 mt-1 text-sm font-bold text-amber-500">
+                          <Star className="h-4 w-4 fill-amber-500 text-amber-500" />
+                          {selectedStaffProfile.stats?.averageRating || 0}/5
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Personal & Employment Details */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div className="border border-border rounded-xl p-4 bg-muted/10 space-y-2.5">
+                        <h3 className="font-bold text-xs uppercase text-muted-foreground tracking-wider border-b border-border/50 pb-1.5">
+                          Personal Information
+                        </h3>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div><span className="text-muted-foreground">Gender:</span> <span className="font-medium text-foreground capitalize">{selectedStaffProfile.gender?.toLowerCase() || "N/A"}</span></div>
+                          <div><span className="text-muted-foreground">Blood Group:</span> <span className="font-medium text-foreground">{selectedStaffProfile.bloodGroup || "N/A"}</span></div>
+                          <div className="col-span-2"><span className="text-muted-foreground">DOB:</span> <span className="font-medium text-foreground">{selectedStaffProfile.dateOfBirth ? new Date(selectedStaffProfile.dateOfBirth).toLocaleDateString() : "N/A"}</span></div>
+                          <div className="col-span-2"><span className="text-muted-foreground">Mobile:</span> <span className="font-medium text-foreground">{selectedStaffProfile.mobileNumber || "N/A"}</span></div>
+                          <div className="col-span-2"><span className="text-muted-foreground">Address:</span> <span className="font-medium text-foreground">{selectedStaffProfile.address || "N/A"}, {selectedStaffProfile.city || ""}, {selectedStaffProfile.state || ""} {selectedStaffProfile.zipCode || ""}</span></div>
+                        </div>
+                      </div>
+
+                      <div className="border border-border rounded-xl p-4 bg-muted/10 space-y-2.5">
+                        <h3 className="font-bold text-xs uppercase text-muted-foreground tracking-wider border-b border-border/50 pb-1.5">
+                          Employment Information
+                        </h3>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div><span className="text-muted-foreground">Role:</span> <span className="font-medium text-foreground">{selectedStaffProfile.designation}</span></div>
+                          <div><span className="text-muted-foreground">Department:</span> <span className="font-medium text-foreground">{selectedStaffProfile.department || "N/A"}</span></div>
+                          <div><span className="text-muted-foreground">Joined:</span> <span className="font-medium text-foreground">{new Date(selectedStaffProfile.joiningDate).toLocaleDateString()}</span></div>
+                          <div><span className="text-muted-foreground">Type:</span> <span className="font-medium text-foreground capitalize">{selectedStaffProfile.employmentType?.toLowerCase() || "N/A"}</span></div>
+                          <div className="col-span-2"><span className="text-muted-foreground">Qualification:</span> <span className="font-medium text-foreground">{selectedStaffProfile.qualification || "N/A"}</span></div>
+                          <div className="col-span-2"><span className="text-muted-foreground">Status:</span> <span className="font-semibold capitalize text-primary">{selectedStaffProfile.employmentStatus?.toLowerCase().replace("_", " ") || "N/A"}</span></div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Teacher Assignment Details */}
+                    {selectedStaffProfile.employeeType === "TEACHING" && (
+                      <div className="border border-border rounded-xl p-4 bg-muted/10 space-y-2">
+                        <h3 className="font-bold text-xs uppercase text-muted-foreground tracking-wider border-b border-border/50 pb-1.5">
+                          Academic Assignment
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                          <div>
+                            <span className="block text-muted-foreground mb-1 font-semibold">Assigned Classes</span>
+                            <div className="flex flex-wrap gap-1">
+                              {selectedStaffProfile.classAssignment?.map((c: any) => (
+                                <span key={c._id} className="bg-muted px-2 py-0.5 rounded text-[10px] font-medium border border-border">{c.name}</span>
+                              ))}
+                              {(!selectedStaffProfile.classAssignment || selectedStaffProfile.classAssignment.length === 0) && <span className="text-muted-foreground">None</span>}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="block text-muted-foreground mb-1 font-semibold">Assigned Sections</span>
+                            <div className="flex flex-wrap gap-1">
+                              {selectedStaffProfile.sectionAssignment?.map((s: any) => (
+                                <span key={s._id} className="bg-muted px-2 py-0.5 rounded text-[10px] font-medium border border-border">{s.name}</span>
+                              ))}
+                              {(!selectedStaffProfile.sectionAssignment || selectedStaffProfile.sectionAssignment.length === 0) && <span className="text-muted-foreground">None</span>}
+                            </div>
+                          </div>
+                          <div>
+                            <span className="block text-muted-foreground mb-1 font-semibold">Assigned Subjects</span>
+                            <div className="flex flex-wrap gap-1">
+                              {selectedStaffProfile.subjects?.map((sub: any) => (
+                                <span key={sub._id} className="bg-primary/10 text-primary px-2 py-0.5 rounded text-[10px] font-medium border border-primary/20">{sub.name}</span>
+                              ))}
+                              {(!selectedStaffProfile.subjects || selectedStaffProfile.subjects.length === 0) && <span className="text-muted-foreground">None</span>}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeModalTab === "edit" && (
+                  <form onSubmit={handleEditSubmit} className="space-y-4 text-xs">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Designation / Role</label>
+                        <input name="designation" defaultValue={selectedStaffProfile.designation} required className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Department</label>
+                        <input name="department" defaultValue={selectedStaffProfile.department || ""} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Basic Salary (₹)</label>
+                        <input name="basicSalary" type="number" defaultValue={selectedStaffProfile.basicSalary || 0} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Employment Status</label>
+                        <select name="employmentStatus" defaultValue={selectedStaffProfile.employmentStatus || "ACTIVE"} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent">
+                          <option value="ACTIVE">Active</option>
+                          <option value="ON_LEAVE">On Leave</option>
+                          <option value="SUSPENDED">Suspended</option>
+                          <option value="RESIGNED">Resigned</option>
+                          <option value="RETIRED">Retired</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Mobile Number</label>
+                        <input name="mobileNumber" defaultValue={selectedStaffProfile.mobileNumber || ""} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Alternate Mobile</label>
+                        <input name="alternateMobileNumber" defaultValue={selectedStaffProfile.alternateMobileNumber || ""} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="col-span-3">
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Address</label>
+                        <input name="address" defaultValue={selectedStaffProfile.address || ""} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">City</label>
+                        <input name="city" defaultValue={selectedStaffProfile.city || ""} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">State</label>
+                        <input name="state" defaultValue={selectedStaffProfile.state || ""} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                      <div>
+                        <label className="block font-semibold text-muted-foreground uppercase tracking-wider mb-1">Zip Code</label>
+                        <input name="zipCode" defaultValue={selectedStaffProfile.zipCode || ""} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-accent" />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-4 border-t border-border/50">
+                      <button
+                        type="button"
+                        onClick={() => setActiveModalTab("details")}
+                        className="px-5 py-2 rounded-lg border border-border hover:bg-muted text-sm font-semibold transition-all active:scale-95"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={updatingProfile}
+                        className="px-5 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-semibold transition-all active:scale-95 disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {updatingProfile && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Save Updates
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {activeModalTab === "attendance" && (
+                  <div className="space-y-3">
+                    <h3 className="font-bold text-xs uppercase text-muted-foreground tracking-wider border-b border-border/50 pb-1.5">
+                      Attendance History Log
+                    </h3>
+                    <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-card">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/30 text-muted-foreground uppercase font-bold tracking-wider text-[10px]">
+                            <th className="p-3">Date</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3">Timing</th>
+                            <th className="p-3">Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedStaffProfile.attendanceHistory?.map((att: any) => (
+                            <tr key={att._id || att.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                              <td className="p-3 font-medium">{new Date(att.date).toLocaleDateString()}</td>
+                              <td className="p-3">
+                                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold capitalize ${
+                                  att.status === "PRESENT"
+                                    ? "bg-[oklch(0.65_0.15_155)]/15 text-[oklch(0.45_0.15_155)]"
+                                    : att.status === "ABSENT"
+                                    ? "bg-destructive/15 text-destructive"
+                                    : "bg-amber-500/15 text-amber-600"
+                                }`}>
+                                  {att.status.toLowerCase().replace("_", " ")}
+                                </span>
+                              </td>
+                              <td className="p-3 text-muted-foreground">
+                                {att.checkInTime ? new Date(att.checkInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—"} to {att.checkOutTime ? new Date(att.checkOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "—"}
+                              </td>
+                              <td className="p-3 text-muted-foreground">{att.remarks || "—"}</td>
+                            </tr>
+                          ))}
+                          {(!selectedStaffProfile.attendanceHistory || selectedStaffProfile.attendanceHistory.length === 0) && (
+                            <tr>
+                              <td colSpan={4} className="p-6 text-center text-muted-foreground">No attendance records found.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {activeModalTab === "salary" && (
+                  <div className="space-y-3">
+                    <h3 className="font-bold text-xs uppercase text-muted-foreground tracking-wider border-b border-border/50 pb-1.5">
+                      Payroll Ledger History
+                    </h3>
+                    <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-card">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/30 text-muted-foreground uppercase font-bold tracking-wider text-[10px]">
+                            <th className="p-3">Month/Year</th>
+                            <th className="p-3">Basic Pay</th>
+                            <th className="p-3">Allow/Deduct</th>
+                            <th className="p-3">Net Salary</th>
+                            <th className="p-3">Status</th>
+                            <th className="p-3 text-right">Payslip</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedStaffProfile.salaryHistory?.map((sal: any) => (
+                            <tr key={sal._id || sal.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                              <td className="p-3 font-semibold">
+                                {new Date(sal.year, sal.month - 1).toLocaleString("en", { month: "short" })} {sal.year}
+                              </td>
+                              <td className="p-3 font-medium">₹{sal.basicPay.toLocaleString()}</td>
+                              <td className="p-3 text-muted-foreground">+₹{sal.allowances} / -₹{sal.deductions}</td>
+                              <td className="p-3 font-bold text-primary">₹{sal.netSalary.toLocaleString()}</td>
+                              <td className="p-3">
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                  sal.status === "PAID"
+                                    ? "bg-[oklch(0.65_0.15_155)]/15 text-[oklch(0.45_0.15_155)]"
+                                    : sal.status === "PROCESSED"
+                                    ? "bg-blue-100 text-blue-700"
+                                    : "bg-amber-100 text-amber-700"
+                                }`}>
+                                  {sal.status}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <button
+                                  onClick={() => downloadPayslip(sal._id, selectedStaffProfile.employeeId)}
+                                  className="p-1 border border-border rounded hover:bg-muted"
+                                  title="Download Payslip PDF"
+                                >
+                                  <Download className="h-3.5 w-3.5 text-primary" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          {(!selectedStaffProfile.salaryHistory || selectedStaffProfile.salaryHistory.length === 0) && (
+                            <tr>
+                              <td colSpan={6} className="p-6 text-center text-muted-foreground">No salary slips generated yet.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {activeModalTab === "leave" && (
+                  <div className="space-y-3">
+                    <h3 className="font-bold text-xs uppercase text-muted-foreground tracking-wider border-b border-border/50 pb-1.5">
+                      Leave History Log
+                    </h3>
+                    <div className="max-h-80 overflow-y-auto rounded-lg border border-border bg-card">
+                      <table className="w-full text-xs text-left">
+                        <thead>
+                          <tr className="border-b border-border bg-muted/30 text-muted-foreground uppercase font-bold tracking-wider text-[10px]">
+                            <th className="p-3">Leave Type</th>
+                            <th className="p-3">Date Range</th>
+                            <th className="p-3">Reason</th>
+                            <th className="p-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedStaffProfile.leaveHistory?.map((l: any) => (
+                            <tr key={l._id || l.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                              <td className="p-3 font-semibold capitalize">{l.leaveType.toLowerCase()}</td>
+                              <td className="p-3 text-muted-foreground">
+                                {new Date(l.startDate).toLocaleDateString()} to {new Date(l.endDate).toLocaleDateString()}
+                              </td>
+                              <td className="p-3 text-muted-foreground">{l.reason}</td>
+                              <td className="p-3">
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                  l.status === "approved" || l.status === "APPROVED"
+                                    ? "bg-[oklch(0.65_0.15_155)]/15 text-[oklch(0.45_0.15_155)]"
+                                    : l.status === "pending" || l.status === "PENDING"
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-destructive/15 text-destructive"
+                                }`}>
+                                  {l.status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                          {(!selectedStaffProfile.leaveHistory || selectedStaffProfile.leaveHistory.length === 0) && (
+                            <tr>
+                              <td colSpan={4} className="p-6 text-center text-muted-foreground">No leave history found.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}

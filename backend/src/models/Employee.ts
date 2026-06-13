@@ -30,7 +30,7 @@ export interface IEmployee extends Document, IAuditFields {
   aadhaarNumber?: string;
   panNumber?: string;
   resumeUrl?: string;
-  employmentStatus?: 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE' | 'RESIGNED';
+  employmentStatus?: 'ACTIVE' | 'ON_LEAVE' | 'SUSPENDED' | 'RESIGNED' | 'RETIRED' | 'INACTIVE';
   employmentType?: 'PERMANENT' | 'TEMPORARY' | 'CONTRACT_BASIS' | 'VISITING_FACULTY' | 'PART_TIME' | 'FULL_TIME';
   workingStartDate?: Date;
   workingEndDate?: Date;
@@ -42,6 +42,8 @@ export interface IEmployee extends Document, IAuditFields {
   isClassTeacher?: boolean;
   bio?: string;
   isActive: boolean;
+  attendancePercent?: number;
+  lastAttendanceDate?: Date;
   isDeleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -76,7 +78,7 @@ const employeeSchema = new Schema<IEmployee>(
     aadhaarNumber: { type: String },
     panNumber: { type: String },
     resumeUrl: { type: String },
-    employmentStatus: { type: String, enum: ['ACTIVE', 'INACTIVE', 'ON_LEAVE', 'RESIGNED'], default: 'ACTIVE' },
+    employmentStatus: { type: String, enum: ['ACTIVE', 'ON_LEAVE', 'SUSPENDED', 'RESIGNED', 'RETIRED', 'INACTIVE'], default: 'ACTIVE' },
     employmentType: { type: String, enum: ['PERMANENT', 'TEMPORARY', 'CONTRACT_BASIS', 'VISITING_FACULTY', 'PART_TIME', 'FULL_TIME'] },
     workingStartDate: { type: Date },
     workingEndDate: { type: Date },
@@ -88,6 +90,8 @@ const employeeSchema = new Schema<IEmployee>(
     isClassTeacher: { type: Boolean, default: false },
     bio: { type: String, default: '' },
     isActive: { type: Boolean, default: true },
+    attendancePercent: { type: Number, default: 100 },
+    lastAttendanceDate: { type: Date },
     ...auditSchemaDefinition,
   },
   { timestamps: true }

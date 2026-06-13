@@ -71,20 +71,20 @@ export const markAttendanceSchema = z.object({
   body: z.object({
     records: z.array(z.object({
       employeeId: z.string().min(24),
-      status: z.enum(['PRESENT', 'ABSENT', 'ON_LEAVE', 'HALF_DAY']),
-      checkInTime: z.string().datetime().optional(),
-      checkOutTime: z.string().datetime().optional(),
+      status: z.enum(['PRESENT', 'ABSENT', 'ON_LEAVE', 'HALF_DAY', 'LATE']),
+      checkInTime: z.string().optional().refine((val) => !val || !Number.isNaN(Date.parse(val)), { message: 'Invalid datetime' }),
+      checkOutTime: z.string().optional().refine((val) => !val || !Number.isNaN(Date.parse(val)), { message: 'Invalid datetime' }),
       remarks: z.string().optional(),
     })),
-    date: z.string().datetime(),
+    date: z.string().refine((val) => !Number.isNaN(Date.parse(val)), { message: 'Invalid date' }),
   }),
 });
 
 export const leaveRequestSchema = z.object({
   body: z.object({
     leaveType: z.enum(['SICK', 'CASUAL', 'EARNED', 'MATERNITY', 'OTHER']),
-    startDate: z.string().datetime(),
-    endDate: z.string().datetime(),
+    startDate: z.string().refine((val) => !Number.isNaN(Date.parse(val)), { message: 'Invalid start date' }),
+    endDate: z.string().refine((val) => !Number.isNaN(Date.parse(val)), { message: 'Invalid end date' }),
     reason: z.string().min(5),
   }),
 });

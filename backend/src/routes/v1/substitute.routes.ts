@@ -1,11 +1,16 @@
 import { Router } from 'express';
-import { createAssignment, listAssignments } from '../../controllers/substitute.controller.js';
+import { createAssignment, listAssignments, getMyAssignments } from '../../controllers/substitute.controller.js';
 import { authenticateToken, requireRoles } from '../../middleware/auth.js';
 import { asyncHandler } from '../../utils/async-handler.js';
 
 const router = Router();
 
 router.use(authenticateToken);
+
+// Allow any authenticated teacher/user to query their own substitute assignments
+router.get('/my', asyncHandler(getMyAssignments));
+
+// Admin only routes
 router.use(requireRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'));
 
 router.post('/', asyncHandler(createAssignment));

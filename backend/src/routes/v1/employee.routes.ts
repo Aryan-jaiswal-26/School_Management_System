@@ -37,6 +37,20 @@ employeeRouter.get(
 );
 
 employeeRouter.get(
+  '/dashboard/stats',
+  requireRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'),
+  requirePermissions('MANAGE_HR'),
+  EmployeeController.getDashboardStats
+);
+
+employeeRouter.get(
+  '/attendance/date',
+  requireRoles('SUPER_ADMIN', 'SCHOOL_ADMIN'),
+  requirePermissions('MANAGE_HR'),
+  EmployeeController.getAttendanceForDate
+);
+
+employeeRouter.get(
   '/:id',
   requireRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'TEACHER', 'ACCOUNTANT'),
   requirePermissions('MANAGE_HR'),
@@ -84,6 +98,26 @@ employeeRouter.post(
   requirePermissions('MANAGE_HR'),
   validateRequest(generateSalarySchema),
   EmployeeController.generateSalary
+);
+
+employeeRouter.get(
+  '/salaries/list',
+  requireRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'ACCOUNTANT'),
+  requirePermissions('MANAGE_HR'),
+  EmployeeController.listSalaries
+);
+
+employeeRouter.patch(
+  '/salaries/:id/status',
+  requireRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'ACCOUNTANT'),
+  requirePermissions('MANAGE_HR'),
+  EmployeeController.updateSalaryStatus
+);
+
+employeeRouter.get(
+  '/salaries/:id/download',
+  requireRoles('SUPER_ADMIN', 'SCHOOL_ADMIN', 'ACCOUNTANT', 'TEACHER', 'DRIVER'),
+  EmployeeController.downloadPayslip
 );
 
 // --- Documents ---

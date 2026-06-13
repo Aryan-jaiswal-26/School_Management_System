@@ -22,6 +22,7 @@ export const Route = createFileRoute("/teacher/")({
 function TeacherDashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [substitutes, setSubstitutes] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchTeacherAnalytics() {
@@ -35,7 +36,16 @@ function TeacherDashboard() {
         setLoading(false);
       }
     }
+    async function fetchMySubstitutes() {
+      try {
+        const res = await apiClient<any>("/substitutes/my");
+        setSubstitutes(res?.data || res || []);
+      } catch (err) {
+        console.error("Failed to load substitute assignments", err);
+      }
+    }
     fetchTeacherAnalytics();
+    fetchMySubstitutes();
   }, []);
 
   if (loading) {
@@ -86,6 +96,49 @@ function TeacherDashboard() {
           tone="success"
         />
       </div>
+
+      {substitutes && substitutes.length > 0 && (
+        <div className="mt-6">
+          <Panel title="Active Substitute Duties" action={<Clock className="h-4 w-4 text-amber-500 animate-pulse" />}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead>
+                  <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground bg-muted/20">
+                    <th className="pb-2 pt-2 px-3">Date</th>
+                    <th className="pb-2 pt-2 px-3">For Absent Teacher</th>
+                    <th className="pb-2 pt-2 px-3">Class / Subject</th>
+                    <th className="pb-2 pt-2 px-3">Period / Time</th>
+                    <th className="pb-2 pt-2 px-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {substitutes.map((sub: any) => (
+                    <tr key={sub._id || sub.id} className="border-b border-border/50 last:border-0 hover:bg-muted/10">
+                      <td className="py-2.5 px-3 font-medium">{new Date(sub.date).toLocaleDateString()}</td>
+                      <td className="py-2.5 px-3 text-muted-foreground">
+                        {sub.absentTeacherId ? `${sub.absentTeacherId.firstName} ${sub.absentTeacherId.lastName}` : "Absent Faculty"}
+                      </td>
+                      <td className="py-2.5 px-3 font-semibold text-primary">
+                        {sub.classId?.name || "N/A"} · {sub.subjectId?.name || "N/A"}
+                      </td>
+                      <td className="py-2.5 px-3 text-muted-foreground">{sub.periodOrTime || "—"}</td>
+                      <td className="py-2.5 px-3">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase ${
+                          sub.status === 'COMPLETED'
+                            ? 'bg-[oklch(0.65_0.15_155)]/15 text-[oklch(0.45_0.15_155)]'
+                            : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {sub.status.toLowerCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        </div>
+      )}
 
       <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2">
