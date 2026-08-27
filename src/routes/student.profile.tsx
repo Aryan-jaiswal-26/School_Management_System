@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api-client";
 import { User, Edit, Save, Award, Download, Printer, X, Plus } from "lucide-react";
 import { PageHeader, Panel } from "@/components/module-shell";
 import { useAuth } from "@/lib/auth-context";
-import { apiClient } from "@/lib/api-client";
 
 export const Route = createFileRoute("/student/profile")({ component: Page });
 
@@ -181,10 +181,9 @@ function Page() {
   // Fetch election candidates from backend
   useEffect(() => {
     const fetchCandidates = () => {
-      fetch('/api/v1/election-candidates')
-        .then((res) => res.json())
+      apiClient<any[]>('/election-candidates')
         .then((data) => {
-          const list = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
+          const list = Array.isArray(data) ? data : [];
           setCandidates(list);
         })
         .catch((e) => console.error('Failed to load candidates', e));
@@ -194,26 +193,22 @@ function Page() {
 
   const handleVote = async (candidateId: string, name: string, hasVoted: boolean) => {
     try {
-      const res = await fetch('/api/v1/election-candidates/vote', {
+      await apiClient('/election-candidates/vote', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidateId })
+        data: { candidateId },
       });
-      if (res.ok) {
+      {
         if (hasVoted) {
            toast.success("Vote Removed", { description: "You have retracted your vote." });
         } else {
            toast.success("Ballot Cast Successfully!", { description: `You voted for ${name}.` });
         }
         // Refetch candidates to update UI
-        fetch('/api/v1/election-candidates')
-          .then((res) => res.json())
+        apiClient<any[]>('/election-candidates')
           .then((data) => {
-             const list = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
+             const list = Array.isArray(data) ? data : [];
              setCandidates(list);
           });
-      } else {
-        toast.error("Failed to vote", { description: "Please try again later." });
       }
     } catch (e) {
       toast.error("Network Error", { description: "Could not cast vote." });

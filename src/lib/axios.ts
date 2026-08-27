@@ -1,48 +1,29 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import { apiClient } from "@/lib/api-client";
 
 export const API_BASE_URL =
   import.meta.env?.VITE_API_URL ??
   '/api/v1';
 
-export const axiosInstance = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  // Send HttpOnly cookies automatically (same-origin via Vite proxy)
-  withCredentials: true,
-});
+function withParams(endpoint: string, params?: Record<string, unknown>): string {
+  if (!params) return endpoint;
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null) query.set(key, String(value));
+  });
+  const queryString = query.toString();
+  return queryString ? `${endpoint}?${queryString}` : endpoint;
+}
 
-// Request Interceptor — no manual token injection needed; cookies are sent automatically
-// If impersonating a school, attach the X-Tenant-ID header to scope requests
-axiosInstance.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    if (typeof window !== "undefined") {
-      const savedImpersonation = localStorage.getItem("super_admin_impersonation");
-      if (savedImpersonation) {
-        try {
-          const session = JSON.parse(savedImpersonation);
-          if (session && session.schoolId) {
-            config.headers['X-Tenant-ID'] = session.schoolId;
-          }
-        } catch (_) {}
-      }
-    }
-    return config;
-  },
-  (error: AxiosError) => Promise.reject(error)
-);
-
-// Response Interceptor
-axiosInstance.interceptors.response.use(
-  (response: AxiosResponse) => response,
-  (error: AxiosError) => {
-    if (error.response?.status === 401) {
-      // Dispatch event so React context can react (e.g. show re-login UI)
-      window.dispatchEvent(new Event('unauthorized'));
-    }
-    return Promise.reject(error);
-  }
-);
+export const axiosInstance = {
+  get: (endpoint: string, config?: { params?: Record<string, unknown> }) =>
+    apiClient(withParams(endpoint, config?.params)),
+  post: (endpoint: string, data?: unknown) =>
+    apiClient(endpoint, { method: "POST", data }),
+  put: (endpoint: string, data?: unknown) =>
+    apiClient(endpoint, { method: "PUT", data }),
+  patch: (endpoint: string, data?: unknown) =>
+    apiClient(endpoint, { method: "PATCH", data }),
+  delete: (endpoint: string) => apiClient(endpoint, { method: "DELETE" }),
+};
 
 export default axiosInstance;

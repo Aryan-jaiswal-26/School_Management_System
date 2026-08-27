@@ -60,9 +60,8 @@ interface AuthContextValue {
 
 const AUTH_STORAGE_KEY = "campus_os_auth";
 
-// Switch this to `true` to use hardcoded mock accounts instead of the real backend.
-// In the future we will fetch this setting from process.env / import.meta.env
-const useBackend = true; 
+// Authentication is local-only; demo accounts are stored in this frontend.
+const useBackend = false;
 
 const MOCK_ACCOUNTS: Record<string, { password: string; user: AuthUser }> = {
   "admin@school.com": {

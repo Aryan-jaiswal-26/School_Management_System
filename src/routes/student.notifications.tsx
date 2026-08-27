@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Bell, MessageSquare, Mail, Smartphone, Check } from "lucide-react";
 import { PageHeader, Panel } from "@/components/module-shell";
 import { toast } from "sonner";
+import { apiClient } from "@/lib/api-client";
 
 export const Route = createFileRoute("/student/notifications")({ component: Page });
 
@@ -23,10 +24,9 @@ function Page() {
 
   // Fetch notifications
   useEffect(() => {
-    fetch("/api/v1/notifications")
-      .then((res) => res.json())
+    apiClient<any[]>("/notifications")
       .then((data) => {
-        const list = Array.isArray(data) ? data : (data?.data && Array.isArray(data.data) ? data.data : []);
+        const list = Array.isArray(data) ? data : [];
         const formatted = list.map((n: any) => ({
           _id: n._id,
           title: n.title,

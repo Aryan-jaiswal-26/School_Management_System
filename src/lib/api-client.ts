@@ -1,6 +1,6 @@
 /**
- * Frontend API Client
- * Wraps native fetch to interact with the Express Backend
+ * Frontend data client.
+ * The application stores its data in the browser so it can run without the API server.
  */
 
 export const API_BASE_URL =
@@ -29,6 +29,76 @@ export class ApiError extends Error {
 // When multiple requests hit 401 simultaneously we only want ONE refresh call.
 let _refreshPromise: Promise<boolean> | null = null;
 
+const LOCAL_STORAGE_PREFIX = "campus_os_data:";
+
+function localKey(endpoint: string): string {
+  const path = endpoint.split("?")[0] || "/";
+  return `${LOCAL_STORAGE_PREFIX}${path}`;
+}
+
+function readLocalData(endpoint: string): any[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = localStorage.getItem(localKey(endpoint));
+    if (!raw) return [];
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? value : [value];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalData(endpoint: string, value: any[]): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(localKey(endpoint), JSON.stringify(value));
+  }
+}
+
+function localResponse<T>(value: T): T {
+  if (value && typeof value === "object") {
+    Object.defineProperty(value, "data", {
+      value,
+      writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+  }
+  return value;
+}
+
+async function localApiClient<T>(endpoint: string, options: RequestOptions): Promise<T> {
+  const method = (options.method ?? "GET").toUpperCase();
+  const path = endpoint.split("?")[0] || "/";
+  const segments = path.split("/").filter(Boolean);
+  const id = segments.length > 1 ? segments[segments.length - 1] : undefined;
+  const collectionEndpoint = id && /^[a-f0-9-]{8,}$/i.test(id)
+    ? `/${segments.slice(0, -1).join("/")}`
+    : path;
+  const records = readLocalData(collectionEndpoint);
+
+  if (method === "GET") {
+    return localResponse(records as T);
+  }
+
+  const payload = options.data ?? {};
+  if (method === "DELETE") {
+    writeLocalData(collectionEndpoint, id ? records.filter((record) => record.id !== id && record._id !== id) : []);
+    return localResponse({ success: true } as T);
+  }
+
+  const recordId = payload.id ?? payload._id ?? id ?? crypto.randomUUID();
+  const record = { ...payload, id: recordId, _id: payload._id ?? recordId };
+  const recordIndex = records.findIndex((item) => item.id === recordId || item._id === recordId);
+  if (recordIndex >= 0) {
+    records[recordIndex] = { ...records[recordIndex], ...record };
+  } else {
+    records.push(record);
+  }
+  writeLocalData(collectionEndpoint, records);
+  return localResponse(record as T);
+}
+
 async function tryRefreshToken(): Promise<boolean> {
   try {
     const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
@@ -46,6 +116,10 @@ export async function apiClient<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
+  if (typeof window !== "undefined") {
+    return localApiClient<T>(endpoint, options);
+  }
+
   const { data, headers: customHeaders, ...customConfig } = options;
 
   const url = `${API_BASE_URL}${endpoint}`;

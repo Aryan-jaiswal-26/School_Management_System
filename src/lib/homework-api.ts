@@ -1,20 +1,4 @@
-import { apiClient, API_BASE_URL, ApiError } from "@/lib/api-client";
-
-interface ApiResponse<T> {
-  success?: boolean;
-  message?: string;
-  data?: T;
-}
-
-async function parseApiResponse<T>(response: Response): Promise<T> {
-  const payload = (await response.json().catch(() => null)) as ApiResponse<T> | null;
-
-  if (!response.ok) {
-    throw new ApiError(payload?.message || response.statusText || "Request failed", response.status, payload);
-  }
-
-  return (payload?.data ?? payload) as T;
-}
+import { apiClient } from "@/lib/api-client";
 
 export async function fetchHomeworkItems() {
   return apiClient<any[]>("/homework");
@@ -28,17 +12,10 @@ export async function createHomeworkAssignment(data: any) {
 }
 
 export async function submitHomeworkAssignment(homeworkId: string, remarks?: string, file?: File) {
-  const formData = new FormData();
-  if (remarks?.trim()) formData.append("remarks", remarks);
-  if (file) formData.append("file", file);
-
-  const response = await fetch(`${API_BASE_URL}/homework/${homeworkId}/submit`, {
+  return apiClient<any>(`/homework/${homeworkId}/submit`, {
     method: "POST",
-    credentials: "include",
-    body: formData,
+    data: { remarks, fileName: file?.name },
   });
-
-  return parseApiResponse<any>(response);
 }
 
 export async function gradeHomeworkSubmission(homeworkId: string, submissionId: string, score: number, feedback?: string) {
@@ -53,11 +30,12 @@ export async function fetchStudyMaterials() {
 }
 
 export async function uploadStudyMaterial(formData: FormData) {
-  const response = await fetch(`${API_BASE_URL}/homework/materials`, {
+  return apiClient<any>("/homework/materials", {
     method: "POST",
-    credentials: "include",
-    body: formData,
+    data: {
+      title: formData.get("title"),
+      description: formData.get("description"),
+      fileName: (formData.get("file") as File | null)?.name,
+    },
   });
-
-  return parseApiResponse<any>(response);
 }
