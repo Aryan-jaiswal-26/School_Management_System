@@ -22,16 +22,7 @@ export default defineConfig(async ({ command }) => {
   ];
 
   if (command === "build") {
-    try {
-      const { cloudflare } = await import("@cloudflare/vite-plugin");
-      plugins.push(
-        cloudflare({
-          viteEnvironment: { name: "ssr" },
-        }),
-      );
-    } catch (e) {
-      console.warn("Could not load @cloudflare/vite-plugin", e);
-    }
+    // Vercel deployment is handled natively by TanStack Start / Nitro
   }
 
   return {
