@@ -8,7 +8,10 @@ export default defineConfig(async ({ command }) => {
   const plugins = [
     tsconfigPaths(),
     tanstackStart({
-      server: { entry: "server" },
+      server: { 
+        entry: "server",
+        preset: "vercel"
+      },
       importProtection: {
         behavior: "error",
         client: {
